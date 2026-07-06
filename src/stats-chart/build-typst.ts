@@ -127,50 +127,69 @@ function scaledDimension(entryCount: number): number {
   return Math.min(Math.max(MIN_SCALED_DIMENSION, entryCount * 2), MAX_SCALED_DIMENSION);
 }
 
+// The fixed (non-entry-scaled) dimension shared by bar/column/boxwhisker —
+// bumped from 6 to 8 per explicit feedback that charts felt too short.
+const BASE_VALUE_AXIS_DIMENSION = 8;
+
 // Long category labels along a horizontal axis overlap each other well
 // before the chart itself runs out of room (confirmed visually: 4 entries
 // like "Week2-Monday" already collide at the default horizontal
 // orientation). Rotating them 45° gives each label a diagonal strip of
 // space instead of a horizontal one, which is the standard fix charting
-// libraries use for this — confirmed via a real compile: identical data
-// goes from fully overlapping to fully legible with this override.
+// libraries use for this.
 //
 // Only columnchart and boxwhisker need this: both lay their category
-// labels along the x-axis at the bottom (confirmed for boxwhisker via a
-// real compile using the same override). barchart's category labels run
+// labels along the x-axis at the bottom. barchart's category labels run
 // along the y-axis instead (a vertical list, one per line — see barchart
 // vs. columnchart orientation comment above), which doesn't have the
 // same horizontal crowding problem regardless of label length.
 //
-// Mechanism: this is NOT a named parameter any chart wrapper function
-// exposes — attempts to pass it as `x-tick-label-angle:` or a `style:`
-// keyword argument were silently accepted but had no visible effect.
-// cetz's actual style system is ambient (set via `draw.set-style(...)`
-// inside the same canvas scope, read later by `styles.resolve(ctx.style,
-// root: "axes", ...)` inside cetz-plot's axes.typ), not argument-based.
+// Mechanism: passing an explicit `x-ticks:` array of (position, content)
+// pairs — with the content itself pre-wrapped in `rotate(45deg, ...)` —
+// scopes the rotation to ONLY the x-axis's tick labels. An earlier
+// approach used cetz's ambient `draw.set-style(axes: (tick: (label:
+// (angle: ...))))`, but that style root applies to EVERY axis sharing
+// the same "axes" style resolution (confirmed by real-world feedback:
+// the value axis's own numeric ticks were rotating too, not just the
+// intended category axis) — there's no separate x-only/y-only key at
+// that shared root. Passing x-ticks directly bypasses that ambient
+// system entirely; verified via a real compile that the y-axis's
+// numbers stay perfectly upright with this approach, for both
+// columnchart and boxwhisker (neither errors on a duplicate `x-ticks`
+// argument, despite each already building its own internal tick list —
+// confirmed empirically, not just assumed).
 const LONG_LABEL_THRESHOLD = 6;
 
 function hasLongLabels(entries: { label: string }[]): boolean {
   return entries.some((entry) => entry.label.length > LONG_LABEL_THRESHOLD);
 }
 
-// The label offset (distance from tick to rotated label) needs to scale
-// with the LONGEST label's length, not be one fixed constant — a longer
-// rotated string reaches further back up toward the bar directly above
-// its tick, so it needs proportionally more clearance to avoid visually
-// intersecting that bar; a short label needs much less. Confirmed via
-// real compiles at both ends: 4 entries with ~13-character labels needed
-// ~1.2cm to fully clear their bars, while a fixed .3cm-ish base is enough
-// for labels just past the rotation threshold.
-function rotatedLabelOffset(maxLabelLength: number): string {
-  const cm = Math.min(0.3 + maxLabelLength * 0.08, 2.5);
-  return `${cm.toFixed(2)}cm`;
-}
-
-function rotateLabelsStyle(entries: { label: string }[]): string {
-  const maxLabelLength = Math.max(...entries.map((entry) => entry.label.length));
-  const offset = rotatedLabelOffset(maxLabelLength);
-  return `cetz.draw.set-style(axes: (tick: (label: (angle: 45deg, offset: ${offset}))))\n  `;
+// `[#"literal string"]` — NOT splicing the label directly into markup
+// content — is required here: this content sits inside a Typst markup
+// block (`[...]`), where `#`, `*`, `_`, `[`, `]`, etc. are all
+// syntactically meaningful (a `#` in markup mode starts CODE, i.e.
+// arbitrary function calls). A label is free-form user/import-provided
+// text with no character whitelist (unlike function-plot's formula
+// field), so splicing it as raw markup would let a label re-interpret
+// itself as Typst code/markup instead of literal text — wrapping it as
+// `#"...string..."` interpolates the STRING's contents as plain text,
+// never re-parsed as markup, regardless of what characters it contains.
+// Confirmed via a real compile with a label containing `*`, `#`, `[`,
+// `]` — rendered completely literally, no formatting/injection.
+// startIndex differs by chart type: columnchart's own internal x-tick
+// positions are 0-based (matching its data array's index), while our own
+// boxwhisker data literal (see the `x: index + 1` in buildStatsChartTypst
+// below) is 1-based — the override's positions must match whichever
+// convention the specific chart already uses, confirmed via real
+// compiles for both.
+function rotatedXTicksLiteral(entries: { label: string }[], startIndex: number): string {
+  const ticks = entries
+    .map(
+      (entry, index) =>
+        `      (${startIndex + index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+    )
+    .join(",\n");
+  return `x-ticks: (\n${ticks},\n    ),\n    `;
 }
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
@@ -193,13 +212,15 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // FIRST entry throws "cannot compare auto and integer"), so the width
     // here must always be a concrete number.
     const width = scaledDimension(spec.data.length);
-    const rotateStyle = hasLongLabels(spec.data) ? rotateLabelsStyle(spec.data) : "";
+    // Our own box data literal above uses 1-based x positions (x: index+1),
+    // so the tick-position override must match that, not start at 0.
+    const rotateTicksArg = hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 1) : "";
     return `${header}
 #cetz.canvas({
-  ${rotateStyle}chart.boxwhisker(
-    size: (${width}, 6),
+  chart.boxwhisker(
+    size: (${width}, ${BASE_VALUE_AXIS_DIMENSION}),
     label-key: "label",
-    (
+    ${rotateTicksArg}(
 ${boxes},
     ),
   )
@@ -252,7 +273,10 @@ ${boxes},
   // bottom-to-top) — so which dimension scales with entry count flips
   // between the two, same reasoning as boxwhisker's width above.
   const entryAxisDimension = scaledDimension(spec.data.length);
-  const size = spec.chartType === "bar" ? `(6, ${entryAxisDimension})` : `(${entryAxisDimension}, 6)`;
+  const size =
+    spec.chartType === "bar"
+      ? `(${BASE_VALUE_AXIS_DIMENSION}, ${entryAxisDimension})`
+      : `(${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION})`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
   // barchart's category axis is y (so its VALUE axis, needing the
   // tick-step/max fix, is x); columnchart's category axis is x (so its
@@ -264,16 +288,17 @@ ${boxes},
       : `y-tick-step: ${categoricalTickStep(spec.data)},\n    y-max: ${categoricalAxisMax(spec.data)},\n    `;
   // Only columnchart's category labels run along the horizontal x-axis
   // (see hasLongLabels's own comment above for why barchart doesn't need
-  // this).
-  const rotateStyle = spec.chartType === "column" && hasLongLabels(spec.data) ? rotateLabelsStyle(spec.data) : "";
+  // this). columnchart's own internal x-tick positions are 0-based.
+  const rotateTicksArg =
+    spec.chartType === "column" && hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 0) : "";
   return `${header}
 #cetz.canvas({
-  ${rotateStyle}chart.${chartFn}(
+  chart.${chartFn}(
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
     size: ${size},
-    ${valueAxisArgs}bar-style: ${paletteLiteral(spec.data)},
+    ${valueAxisArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data)},
   )
 })
 `;

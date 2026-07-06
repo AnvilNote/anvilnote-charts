@@ -85,15 +85,16 @@ test("boxwhisker chart maps median to q2 and scales width with entry count", () 
   });
   assert.match(typ, /chart\.boxwhisker\(/);
   assert.match(typ, /q2: 30/);
-  assert.match(typ, /size: \(6, 6\)/);
+  // 3 entries: scaledDimension(3) = max(6, 6) = 6 (width); fixed height is 8
+  assert.match(typ, /size: \(6, 8\)/);
 });
 
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
   const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: manyEntries });
   const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", data: manyEntries });
-  assert.match(bar, /size: \(6, 12\)/);
-  assert.match(column, /size: \(12, 6\)/);
+  assert.match(bar, /size: \(8, 12\)/);
+  assert.match(column, /size: \(12, 8\)/);
 });
 
 test("entry-count scaling clamps at a max dimension, instead of growing unbounded", () => {
@@ -113,9 +114,9 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
     max: 4,
   }));
   const boxwhisker = buildStatsChartTypst({ kind: "statsChart", chartType: "boxwhisker", data: boxwhiskerData });
-  assert.match(bar, /size: \(6, 24\)/);
-  assert.match(column, /size: \(24, 6\)/);
-  assert.match(boxwhisker, /size: \(24, 6\)/);
+  assert.match(bar, /size: \(8, 24\)/);
+  assert.match(column, /size: \(24, 8\)/);
+  assert.match(boxwhisker, /size: \(24, 8\)/);
 });
 
 test("bar chart computes a nice x-tick-step from the max value, avoiding crowded/overlapping tick labels", () => {
@@ -183,20 +184,21 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
   assert.match(typ, /x-max: 100/);
 });
 
-test("column chart rotates labels 45deg when a label exceeds the long-label threshold, offset scaled to the longest label", () => {
+test("column chart rotates labels via an explicit x-ticks override when a label exceeds the long-label threshold", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
     data: [
       { label: "Week2-Monday", value: 10 },
-      { label: "Week2-Tuesday", value: 20 }, // 13 chars, the longer of the two
+      { label: "Week2-Tuesday", value: 20 },
     ],
   });
-  // 0.3 + 13 * 0.08 = 1.34
-  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: 1\.34cm\)\)\)\)/);
+  assert.match(typ, /x-ticks: \(/);
+  assert.match(typ, /\(0, rotate\(45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
+  assert.match(typ, /\(1, rotate\(45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
 });
 
-test("column chart does not rotate labels when all labels are short", () => {
+test("column chart does not add an x-ticks override when all labels are short", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
@@ -205,7 +207,7 @@ test("column chart does not rotate labels when all labels are short", () => {
       { label: "Tue", value: 20 },
     ],
   });
-  assert.doesNotMatch(typ, /set-style/);
+  assert.doesNotMatch(typ, /x-ticks:/);
 });
 
 test("bar chart never rotates labels, even with long labels (category axis is vertical, not crowded)", () => {
@@ -214,43 +216,50 @@ test("bar chart never rotates labels, even with long labels (category axis is ve
     chartType: "bar",
     data: [{ label: "Week2-Monday", value: 10 }],
   });
-  assert.doesNotMatch(typ, /set-style/);
+  assert.doesNotMatch(typ, /x-ticks:/);
 });
 
-test("rotated label offset grows with the longest label, not a fixed amount", () => {
-  const shortish = buildStatsChartTypst({
-    kind: "statsChart",
-    chartType: "column",
-    data: [{ label: "Weekday", value: 10 }], // 7 chars, just over the threshold
-  });
-  const longer = buildStatsChartTypst({
-    kind: "statsChart",
-    chartType: "column",
-    data: [{ label: "Week2-Wednesday", value: 10 }], // 15 chars
-  });
-  // 0.3 + 7 * 0.08 = 0.86
-  assert.match(shortish, /offset: 0\.86cm/);
-  // 0.3 + 15 * 0.08 = 1.50 (toFixed(2) keeps the trailing zero)
-  assert.match(longer, /offset: 1\.50cm/);
-});
-
-test("rotated label offset is capped, not unbounded for extremely long labels", () => {
+// Regression test: an earlier approach used cetz's AMBIENT
+// draw.set-style(axes: (tick: (label: (angle: ...)))) to rotate labels,
+// which — per real user feedback — rotated the VALUE axis's numeric
+// ticks too (that style root applies to every axis, not just the one
+// meant to be rotated). The x-ticks-array approach replaced it
+// specifically to avoid this; this test pins that the old ambient
+// mechanism is gone, not just that some rotation exists.
+test("rotation never uses the ambient axes style (would also rotate the value axis)", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
-    data: [{ label: "A".repeat(100), value: 10 }],
+    data: [{ label: "Week2-Wednesday", value: 10 }],
   });
-  assert.match(typ, /offset: 2\.50cm/);
+  assert.doesNotMatch(typ, /draw\.set-style/);
 });
 
-test("boxwhisker rotates labels 45deg when a label is long, offset scaled to its length", () => {
+test("boxwhisker rotates labels via an x-ticks override, 1-indexed to match its own box x positions", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "boxwhisker",
-    data: [{ label: "Week2-Monday", min: 0, q1: 1, median: 2, q3: 3, max: 4 }],
+    data: [
+      { label: "Week2-Monday", min: 0, q1: 1, median: 2, q3: 3, max: 4 },
+      { label: "Week2-Tuesday", min: 0, q1: 1, median: 2, q3: 3, max: 4 },
+    ],
   });
-  // "Week2-Monday" is 12 chars: 0.3 + 12 * 0.08 = 1.26
-  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: 1\.26cm\)\)\)\)/);
+  assert.match(typ, /\(1, rotate\(45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
+  assert.match(typ, /\(2, rotate\(45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
+});
+
+test("rotated tick content escapes markup-sensitive characters as a safe string, not raw markup", () => {
+  // The rotated content sits inside a Typst markup block ([...]) — a raw
+  // "#" there would start CODE mode (arbitrary function calls), and "*"/
+  // "_" would apply formatting. Wrapping the label as #"...string..."
+  // interpolates it as inert text no matter what it contains, so a label
+  // like `#read("/etc/passwd")` or `*bold*` can never be reinterpreted.
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: '#dangerous "quote" *and* stuff-long', value: 10 }],
+  });
+  assert.match(typ, /rotate\(45deg, reflow: true\)\[#"#dangerous \\"quote\\" \*and\* stuff-long"\]/);
 });
 
 test("escapes double quotes in labels", () => {
