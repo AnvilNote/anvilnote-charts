@@ -4,6 +4,7 @@ import { buildFunctionPlotTypst, SIMPLE_PLOT_VERSION } from "./build-typst.js";
 
 test("generates an import pinned to the bundled simple-plot version", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
     xMin: -10,
     xMax: 10,
@@ -15,6 +16,7 @@ test("generates an import pinned to the bundled simple-plot version", () => {
 
 test("includes one plot() curve entry per input curve, in order", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [
       { formula: "sin(x)", color: "#000000", dash: "solid" },
       { formula: "cos(x)", color: "#595959", dash: "dashed" },
@@ -33,6 +35,7 @@ test("includes one plot() curve entry per input curve, in order", () => {
 
 test("passes xmin/xmax through unchanged", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [{ formula: "x", color: "#000000", dash: "solid" }],
     xMin: -3.5,
     xMax: 7,
@@ -44,6 +47,7 @@ test("passes xmin/xmax through unchanged", () => {
 
 test("imports calc module names so bare sin/cos/etc. resolve in formulas", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
     xMin: -10,
     xMax: 10,
@@ -55,6 +59,7 @@ test("imports calc module names so bare sin/cos/etc. resolve in formulas", () =>
 
 test("omits xtick/ytick args when showAxisTicks is true", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
     xMin: -10,
     xMax: 10,
@@ -67,6 +72,7 @@ test("omits xtick/ytick args when showAxisTicks is true", () => {
 
 test("sets xtick/ytick to none when showAxisTicks is false", () => {
   const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
     curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
     xMin: -10,
     xMax: 10,

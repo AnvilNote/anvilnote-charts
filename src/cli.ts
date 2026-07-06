@@ -9,8 +9,9 @@ import { readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
-import { functionPlotSpecSchema } from "./schema.js";
-import { buildFunctionPlotTypst } from "./build-typst.js";
+import { chartSpecSchema } from "./schema.js";
+import { buildFunctionPlotTypst } from "./function-plot/build-typst.js";
+import { buildStatsChartTypst } from "./stats-chart/build-typst.js";
 import { compileTypstToSvg } from "./compile.js";
 
 function parseArgs(argv: string[]) {
@@ -41,14 +42,15 @@ async function main() {
     return;
   }
 
-  const tempTypPath = path.join(os.tmpdir(), `function-plot-${randomUUID()}.typ`);
+  const tempTypPath = path.join(os.tmpdir(), `anvilnote-chart-${randomUUID()}.typ`);
 
   try {
     const raw = await readFile(args.input, "utf8");
-    const spec = functionPlotSpecSchema.parse(JSON.parse(raw));
+    const spec = chartSpecSchema.parse(JSON.parse(raw));
     logs.push(`Read input from ${args.input}`);
 
-    const typst = buildFunctionPlotTypst(spec);
+    const typst =
+      spec.kind === "functionPlot" ? buildFunctionPlotTypst(spec) : buildStatsChartTypst(spec);
     await writeFile(tempTypPath, typst, "utf8");
 
     const result = await compileTypstToSvg(tempTypPath, args.output);
