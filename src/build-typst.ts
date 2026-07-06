@@ -28,12 +28,19 @@ export function buildFunctionPlotTypst(spec: FunctionPlotSpec): string {
   const CALC_IMPORTS =
     "sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, pow, sqrt, exp, ln, log, abs, floor, ceil, round, min, max, pi, e";
 
+  // simple-plot's `xtick`/`ytick` separately control the tick marks +
+  // number labels along each axis from `show-grid` (the background grid
+  // squares) — confirmed via a real compile that `xtick: none, ytick: none`
+  // hides both the tick marks and their numbers while leaving the axis
+  // lines/arrows and (if enabled) the background gridlines untouched.
+  const tickArgs = spec.showAxisTicks ? "" : ",\n  xtick: none, ytick: none";
+
   return `#import "@preview/simple-plot:${SIMPLE_PLOT_VERSION}": plot
 #import calc: ${CALC_IMPORTS}
 #set page(width: auto, height: auto, margin: 8pt)
 #plot(
   xmin: ${spec.xMin}, xmax: ${spec.xMax},
-  show-grid: ${spec.showGridlines},
+  show-grid: ${spec.showGridlines}${tickArgs},
 ${curveArgs}
 )
 `;

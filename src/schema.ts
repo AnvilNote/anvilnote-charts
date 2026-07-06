@@ -25,6 +25,10 @@ export const functionPlotSpecSchema = z
     xMin: z.number().finite(),
     xMax: z.number().finite(),
     showGridlines: z.boolean(),
+    // Defaulted (not required): added after the initial spec shape shipped,
+    // so older saved documents' cached specs that predate this field still
+    // validate — they just get the pre-existing "ticks visible" behavior.
+    showAxisTicks: z.boolean().default(true),
   })
   .refine((spec) => spec.xMin < spec.xMax, {
     message: "xMin must be less than xMax",

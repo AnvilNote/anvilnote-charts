@@ -56,3 +56,24 @@ test("rejects an invalid hex color", () => {
     }),
   );
 });
+
+test("defaults showAxisTicks to true when omitted (older saved specs)", () => {
+  const result = functionPlotSpecSchema.parse({
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    xMin: -10,
+    xMax: 10,
+    showGridlines: true,
+  });
+  assert.equal(result.showAxisTicks, true);
+});
+
+test("accepts showAxisTicks: false", () => {
+  const result = functionPlotSpecSchema.parse({
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    xMin: -10,
+    xMax: 10,
+    showGridlines: true,
+    showAxisTicks: false,
+  });
+  assert.equal(result.showAxisTicks, false);
+});
