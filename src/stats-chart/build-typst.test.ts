@@ -148,6 +148,41 @@ test("nice tick step rounds to 1/2/5/10 x a power of ten, not an arbitrary fract
   assert.match(typ, /x-tick-step: 2\b/);
 });
 
+test("bar chart rounds axis max up to the next tick-step multiple past the data max", () => {
+  // Reported bug: max value 92 with a 20-step axis only showed a
+  // gridline up to 80, leaving the tallest bar floating above the
+  // topmost labeled line. x-max should round up to 100.
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [
+      { label: "Mon", value: 42 },
+      { label: "Wed", value: 92 },
+    ],
+  });
+  assert.match(typ, /x-tick-step: 20/);
+  assert.match(typ, /x-max: 100/);
+});
+
+test("column chart rounds axis max up using y-max", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: "A", value: 92 }],
+  });
+  assert.match(typ, /y-tick-step: 20/);
+  assert.match(typ, /y-max: 100/);
+});
+
+test("axis max is unchanged when the data max is already an exact tick-step multiple", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [{ label: "A", value: 100 }],
+  });
+  assert.match(typ, /x-max: 100/);
+});
+
 test("escapes double quotes in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",

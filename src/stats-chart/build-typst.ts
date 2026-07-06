@@ -93,6 +93,22 @@ function categoricalTickStep(data: CategoricalEntry[]): number {
   return niceTickStep(maxAbsValue);
 }
 
+// Without an explicit upper bound, cetz-plot's value axis auto-fits to
+// the exact data max (e.g. 92) rather than a round number — the topmost
+// gridline lands wherever the last tick-step multiple below the data max
+// falls (80, for a max of 92 with a step of 20), leaving the tallest
+// bar's actual value floating above the last labeled gridline instead of
+// the axis extending to a clean rounded top. Rounding the max UP to the
+// next tick-step multiple (100, for a max of 92 with a step of 20) gives
+// the axis a full final gridline at a round number. Confirmed via a real
+// compile: passing this as x-max/y-max alongside the existing
+// x-tick-step/y-tick-step produces exactly that.
+function categoricalAxisMax(data: CategoricalEntry[]): number {
+  const maxValue = Math.max(...data.map((entry) => entry.value));
+  const step = categoricalTickStep(data);
+  return Math.ceil(maxValue / step) * step;
+}
+
 // Scales the chart's entry-count axis with the number of entries (so a
 // 2-bar chart isn't rendered at the same size as a 15-bar chart), but
 // clamped at MAX_SCALED_DIMENSION — without a ceiling, a chart with many
@@ -191,14 +207,14 @@ ${boxes},
   const entryAxisDimension = scaledDimension(spec.data.length);
   const size = spec.chartType === "bar" ? `(6, ${entryAxisDimension})` : `(${entryAxisDimension}, 6)`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
-  // barchart's category axis is y (so its VALUE axis, needing the tick-step
-  // fix, is x); columnchart's category axis is x (so its value axis is y)
-  // — confirmed by reading both files' own `x-tick-step: none` / category
-  // tick-list placement.
-  const tickStepArg =
+  // barchart's category axis is y (so its VALUE axis, needing the
+  // tick-step/max fix, is x); columnchart's category axis is x (so its
+  // value axis is y) — confirmed by reading both files' own
+  // `x-tick-step: none` / category tick-list placement.
+  const valueAxisArgs =
     spec.chartType === "bar"
-      ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    `
-      : `y-tick-step: ${categoricalTickStep(spec.data)},\n    `;
+      ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    x-max: ${categoricalAxisMax(spec.data)},\n    `
+      : `y-tick-step: ${categoricalTickStep(spec.data)},\n    y-max: ${categoricalAxisMax(spec.data)},\n    `;
   return `${header}
 #cetz.canvas({
   chart.${chartFn}(
@@ -206,7 +222,7 @@ ${boxes},
     value-key: "value",
     label-key: "label",
     size: ${size},
-    ${tickStepArg}bar-style: ${paletteLiteral(spec.data)},
+    ${valueAxisArgs}bar-style: ${paletteLiteral(spec.data)},
   )
 })
 `;
