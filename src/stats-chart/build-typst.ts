@@ -93,6 +93,24 @@ function categoricalTickStep(data: CategoricalEntry[]): number {
   return niceTickStep(maxAbsValue);
 }
 
+// Scales the chart's entry-count axis with the number of entries (so a
+// 2-bar chart isn't rendered at the same size as a 15-bar chart), but
+// clamped at MAX_SCALED_DIMENSION — without a ceiling, a chart with many
+// entries (e.g. a 20-row CSV import, right at the schema's MAX_ENTRIES)
+// grows unboundedly wide/tall and overflows its container instead of
+// just packing bars/boxes more tightly at a fixed overall size, which is
+// the standard "adjust bandwidth to entry count" behavior other charting
+// tools use. Verified via a real compile with 20 categorical entries: the
+// clamp keeps the chart within a fixed size, with individual bars
+// getting proportionally narrower instead of the whole chart exploding
+// past its bounds.
+const MIN_SCALED_DIMENSION = 6;
+const MAX_SCALED_DIMENSION = 24;
+
+function scaledDimension(entryCount: number): number {
+  return Math.min(Math.max(MIN_SCALED_DIMENSION, entryCount * 2), MAX_SCALED_DIMENSION);
+}
+
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
 #import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart
@@ -111,10 +129,8 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // Unlike bar/columnchart, boxwhisker's own "auto" handling only
     // resolves for the SECOND size entry (verified: passing `auto` for the
     // FIRST entry throws "cannot compare auto and integer"), so the width
-    // here must always be a concrete number. Base bumped from 4 to 6 (and
-    // per-entry factor 1.5 to 2) per explicit feedback that charts felt
-    // cramped at the smaller size.
-    const width = Math.max(6, spec.data.length * 2);
+    // here must always be a concrete number.
+    const width = scaledDimension(spec.data.length);
     return `${header}
 #cetz.canvas({
   chart.boxwhisker(
@@ -172,11 +188,8 @@ ${boxes},
   // left-to-right); columnchart spreads them along its WIDTH (bars grow
   // bottom-to-top) — so which dimension scales with entry count flips
   // between the two, same reasoning as boxwhisker's width above.
-  // Base bumped from 4 to 6 (and per-entry factor 1.5 to 2), matching
-  // boxwhisker's own bump above, per explicit feedback that charts felt
-  // cramped at the smaller size.
-  const scaledDimension = Math.max(6, spec.data.length * 2);
-  const size = spec.chartType === "bar" ? `(6, ${scaledDimension})` : `(${scaledDimension}, 6)`;
+  const entryAxisDimension = scaledDimension(spec.data.length);
+  const size = spec.chartType === "bar" ? `(6, ${entryAxisDimension})` : `(${entryAxisDimension}, 6)`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
   // barchart's category axis is y (so its VALUE axis, needing the tick-step
   // fix, is x); columnchart's category axis is x (so its value axis is y)

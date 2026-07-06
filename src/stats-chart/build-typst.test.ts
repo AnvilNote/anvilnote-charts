@@ -96,6 +96,28 @@ test("bar chart height scales with entry count; column chart width scales instea
   assert.match(column, /size: \(12, 6\)/);
 });
 
+test("entry-count scaling clamps at a max dimension, instead of growing unbounded", () => {
+  // At MAX_ENTRIES (20), the naive count*2 formula would produce 40 —
+  // far past a size a preview pane/embedded document can display without
+  // overflowing. The clamp keeps the chart's overall size bounded; bars
+  // just get proportionally narrower instead.
+  const twentyEntries = Array.from({ length: 20 }, (_, i) => ({ label: `L${i}`, value: i }));
+  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: twentyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", data: twentyEntries });
+  const boxwhiskerData = Array.from({ length: 20 }, (_, i) => ({
+    label: `L${i}`,
+    min: 0,
+    q1: 1,
+    median: 2,
+    q3: 3,
+    max: 4,
+  }));
+  const boxwhisker = buildStatsChartTypst({ kind: "statsChart", chartType: "boxwhisker", data: boxwhiskerData });
+  assert.match(bar, /size: \(6, 24\)/);
+  assert.match(column, /size: \(24, 6\)/);
+  assert.match(boxwhisker, /size: \(24, 6\)/);
+});
+
 test("bar chart computes a nice x-tick-step from the max value, avoiding crowded/overlapping tick labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
