@@ -127,6 +127,39 @@ function scaledDimension(entryCount: number): number {
   return Math.min(Math.max(MIN_SCALED_DIMENSION, entryCount * 2), MAX_SCALED_DIMENSION);
 }
 
+// Long category labels along a horizontal axis overlap each other well
+// before the chart itself runs out of room (confirmed visually: 4 entries
+// like "Week2-Monday" already collide at the default horizontal
+// orientation). Rotating them 45° gives each label a diagonal strip of
+// space instead of a horizontal one, which is the standard fix charting
+// libraries use for this — confirmed via a real compile: identical data
+// goes from fully overlapping to fully legible with this override.
+//
+// Only columnchart and boxwhisker need this: both lay their category
+// labels along the x-axis at the bottom (confirmed for boxwhisker via a
+// real compile using the same override). barchart's category labels run
+// along the y-axis instead (a vertical list, one per line — see barchart
+// vs. columnchart orientation comment above), which doesn't have the
+// same horizontal crowding problem regardless of label length.
+//
+// Mechanism: this is NOT a named parameter any chart wrapper function
+// exposes — attempts to pass it as `x-tick-label-angle:` or a `style:`
+// keyword argument were silently accepted but had no visible effect.
+// cetz's actual style system is ambient (set via `draw.set-style(...)`
+// inside the same canvas scope, read later by `styles.resolve(ctx.style,
+// root: "axes", ...)` inside cetz-plot's axes.typ), not argument-based.
+const LONG_LABEL_THRESHOLD = 6;
+
+function hasLongLabels(entries: { label: string }[]): boolean {
+  return entries.some((entry) => entry.label.length > LONG_LABEL_THRESHOLD);
+}
+
+// offset: .5cm (default is .15cm) pushes the rotated label further away
+// from its tick — at the default offset, a 45°-rotated label's top edge
+// visually intersects the bar directly above it (confirmed via a real
+// compile); the larger offset clears the bars entirely.
+const ROTATE_LABELS_STYLE = `cetz.draw.set-style(axes: (tick: (label: (angle: 45deg, offset: .5cm))))\n  `;
+
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
 #import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart
@@ -147,9 +180,10 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // FIRST entry throws "cannot compare auto and integer"), so the width
     // here must always be a concrete number.
     const width = scaledDimension(spec.data.length);
+    const rotateStyle = hasLongLabels(spec.data) ? ROTATE_LABELS_STYLE : "";
     return `${header}
 #cetz.canvas({
-  chart.boxwhisker(
+  ${rotateStyle}chart.boxwhisker(
     size: (${width}, 6),
     label-key: "label",
     (
@@ -215,9 +249,13 @@ ${boxes},
     spec.chartType === "bar"
       ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    x-max: ${categoricalAxisMax(spec.data)},\n    `
       : `y-tick-step: ${categoricalTickStep(spec.data)},\n    y-max: ${categoricalAxisMax(spec.data)},\n    `;
+  // Only columnchart's category labels run along the horizontal x-axis
+  // (see hasLongLabels's own comment above for why barchart doesn't need
+  // this).
+  const rotateStyle = spec.chartType === "column" && hasLongLabels(spec.data) ? ROTATE_LABELS_STYLE : "";
   return `${header}
 #cetz.canvas({
-  chart.${chartFn}(
+  ${rotateStyle}chart.${chartFn}(
     ${dataLiteral},
     value-key: "value",
     label-key: "label",

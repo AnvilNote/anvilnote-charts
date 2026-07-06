@@ -183,6 +183,48 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
   assert.match(typ, /x-max: 100/);
 });
 
+test("column chart rotates labels 45deg when a label exceeds the long-label threshold", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [
+      { label: "Week2-Monday", value: 10 },
+      { label: "Week2-Tuesday", value: 20 },
+    ],
+  });
+  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: \.5cm\)\)\)\)/);
+});
+
+test("column chart does not rotate labels when all labels are short", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [
+      { label: "Mon", value: 10 },
+      { label: "Tue", value: 20 },
+    ],
+  });
+  assert.doesNotMatch(typ, /set-style/);
+});
+
+test("bar chart never rotates labels, even with long labels (category axis is vertical, not crowded)", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [{ label: "Week2-Monday", value: 10 }],
+  });
+  assert.doesNotMatch(typ, /set-style/);
+});
+
+test("boxwhisker rotates labels 45deg when a label is long", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "boxwhisker",
+    data: [{ label: "Week2-Monday", min: 0, q1: 1, median: 2, q3: 3, max: 4 }],
+  });
+  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: \.5cm\)\)\)\)/);
+});
+
 test("escapes double quotes in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
