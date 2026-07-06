@@ -14,6 +14,22 @@ test("generates an import pinned to the bundled simple-plot version", () => {
   assert.match(typ, new RegExp(`#import "@preview/simple-plot:${SIMPLE_PLOT_VERSION}": plot`));
 });
 
+test("passes an explicit domain: (xmin, xmax) on every curve", () => {
+  const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
+    curves: [
+      { formula: "ln(x)", color: "#000000", dash: "solid", thickness: 1.5 },
+      { formula: "sqrt(x)", color: "#595959", dash: "dashed", thickness: 1.5 },
+    ],
+    xMin: 10,
+    xMax: 100,
+    showGridlines: true,
+    showAxisTicks: true,
+  });
+  const domainMatches = [...typ.matchAll(/domain: \(10, 100\)/g)];
+  assert.equal(domainMatches.length, 2);
+});
+
 test("splices each curve's own thickness into its stroke, not a hardcoded value", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",

@@ -33,10 +33,25 @@ function computePlotSize(xMin: number, xMax: number): { width: number; height: n
 }
 
 export function buildFunctionPlotTypst(spec: FunctionPlotSpec): string {
+  // Explicit domain: (xmin, xmax) on every curve — without it, simple-plot's
+  // own internal obstacle-detection pre-pass (used for automatic curve-label
+  // placement) samples across a much WIDER range than the visible plot: it
+  // pads by `max(xmax-xmin, ymax-ymin) * 0.5` on each side (ymax/ymin default
+  // to a fixed -5/5 when not given — see computePlotSize's own comment on
+  // this same fixed default). For a domain-restricted formula like ln(x) or
+  // sqrt(x) with a wide x-range (e.g. xMin: 10, xMax: 100 — an x-span of 90
+  // against the fixed 10-unit y-span pads by 45 units), that padded sampling
+  // window can dip to zero or negative, and Typst's own calc.ln/sqrt throw
+  // ("value must be strictly positive") on the very first sample — a crash
+  // confirmed via a real compile, not just reasoned about. Other code paths
+  // inside simple-plot already default `domain` to (xmin, xmax) when the
+  // caller doesn't set it (see fill/fill-between); this obstacle-sampling
+  // pass is the one path that doesn't, so passing it explicitly here closes
+  // that gap for every curve, not just domain-restricted ones.
   const curveArgs = spec.curves
     .map(
       (curve) =>
-        `  (fn: x => ${curve.formula}, stroke: (paint: rgb("${curve.color}"), thickness: ${curve.thickness}pt, dash: "${curve.dash}"))`,
+        `  (fn: x => ${curve.formula}, domain: (${spec.xMin}, ${spec.xMax}), stroke: (paint: rgb("${curve.color}"), thickness: ${curve.thickness}pt, dash: "${curve.dash}"))`,
     )
     .join(",\n");
 
