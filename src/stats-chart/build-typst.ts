@@ -111,12 +111,14 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // Unlike bar/columnchart, boxwhisker's own "auto" handling only
     // resolves for the SECOND size entry (verified: passing `auto` for the
     // FIRST entry throws "cannot compare auto and integer"), so the width
-    // here must always be a concrete number.
-    const width = Math.max(4, spec.data.length * 1.5);
+    // here must always be a concrete number. Base bumped from 4 to 6 (and
+    // per-entry factor 1.5 to 2) per explicit feedback that charts felt
+    // cramped at the smaller size.
+    const width = Math.max(6, spec.data.length * 2);
     return `${header}
 #cetz.canvas({
   chart.boxwhisker(
-    size: (${width}, 4),
+    size: (${width}, 6),
     label-key: "label",
     (
 ${boxes},
@@ -140,7 +142,7 @@ ${boxes},
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
-    radius: 2,
+    radius: 3,
     slice-style: ${colorArrayLiteral(spec.data)}${legendArg}
   )
 })
@@ -148,12 +150,15 @@ ${boxes},
   }
 
   if (spec.chartType === "pyramid") {
+    // level-height defaults to 1 in cetz-plot; doubled to 2 per explicit
+    // feedback that the default rendered too small/cramped.
     return `${header}
 #cetz.canvas({
   chart.pyramid(
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
+    level-height: 2,
     level-style: ${paletteLiteral(spec.data)},
   )
 })
@@ -167,8 +172,11 @@ ${boxes},
   // left-to-right); columnchart spreads them along its WIDTH (bars grow
   // bottom-to-top) — so which dimension scales with entry count flips
   // between the two, same reasoning as boxwhisker's width above.
-  const scaledDimension = Math.max(4, spec.data.length * 1.5);
-  const size = spec.chartType === "bar" ? `(4, ${scaledDimension})` : `(${scaledDimension}, 4)`;
+  // Base bumped from 4 to 6 (and per-entry factor 1.5 to 2), matching
+  // boxwhisker's own bump above, per explicit feedback that charts felt
+  // cramped at the smaller size.
+  const scaledDimension = Math.max(6, spec.data.length * 2);
+  const size = spec.chartType === "bar" ? `(6, ${scaledDimension})` : `(${scaledDimension}, 6)`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
   // barchart's category axis is y (so its VALUE axis, needing the tick-step
   // fix, is x); columnchart's category axis is x (so its value axis is y)

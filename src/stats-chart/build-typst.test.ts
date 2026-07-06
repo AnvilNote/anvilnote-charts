@@ -85,15 +85,15 @@ test("boxwhisker chart maps median to q2 and scales width with entry count", () 
   });
   assert.match(typ, /chart\.boxwhisker\(/);
   assert.match(typ, /q2: 30/);
-  assert.match(typ, /size: \(4\.5, 4\)/);
+  assert.match(typ, /size: \(6, 6\)/);
 });
 
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
   const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: manyEntries });
   const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", data: manyEntries });
-  assert.match(bar, /size: \(4, 9\)/);
-  assert.match(column, /size: \(9, 4\)/);
+  assert.match(bar, /size: \(6, 12\)/);
+  assert.match(column, /size: \(12, 6\)/);
 });
 
 test("bar chart computes a nice x-tick-step from the max value, avoiding crowded/overlapping tick labels", () => {
