@@ -96,6 +96,36 @@ test("bar chart height scales with entry count; column chart width scales instea
   assert.match(column, /size: \(9, 4\)/);
 });
 
+test("bar chart computes a nice x-tick-step from the max value, avoiding crowded/overlapping tick labels", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [
+      { label: "Test", value: 100 },
+      { label: "Hi", value: 12 },
+    ],
+  });
+  assert.match(typ, /x-tick-step: 20/);
+});
+
+test("column chart computes a nice y-tick-step from the max value", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: "Test", value: 100 }],
+  });
+  assert.match(typ, /y-tick-step: 20/);
+});
+
+test("nice tick step rounds to 1/2/5/10 x a power of ten, not an arbitrary fraction", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [{ label: "A", value: 13 }],
+  });
+  assert.match(typ, /x-tick-step: 2\b/);
+});
+
 test("escapes double quotes in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",

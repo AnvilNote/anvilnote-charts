@@ -69,6 +69,30 @@ function paletteLiteral(data: CategoricalEntry[]): string {
   return `cetz.palette.new(colors: ${colorArrayLiteral(data)})`;
 }
 
+// cetz-plot's own tick-step default for bar/columnchart's value axis packs
+// one tick per unit of the axis's "natural" step, which crowds together
+// (and visibly overlaps, e.g. "90100") once the value range is much wider
+// than the chart's fixed size — the axis length scales with entry COUNT
+// (see scaledDimension below), not with value MAGNITUDE, so a chart with
+// only 2 bars but a max value of 100 gets the same narrow axis as one
+// with a max value of 10. Computing an explicit "nice" step (aiming for
+// ~5 ticks) and passing it via x-tick-step/y-tick-step fixes this
+// regardless of chart size — confirmed via a real compile comparing
+// default vs. explicit step for the same 0-100 range.
+function niceTickStep(maxAbsValue: number): number {
+  if (maxAbsValue <= 0) return 1;
+  const roughStep = maxAbsValue / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const niceNormalized = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
+  return niceNormalized * magnitude;
+}
+
+function categoricalTickStep(data: CategoricalEntry[]): number {
+  const maxAbsValue = Math.max(...data.map((entry) => Math.abs(entry.value)));
+  return niceTickStep(maxAbsValue);
+}
+
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
 #import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart
@@ -146,6 +170,14 @@ ${boxes},
   const scaledDimension = Math.max(4, spec.data.length * 1.5);
   const size = spec.chartType === "bar" ? `(4, ${scaledDimension})` : `(${scaledDimension}, 4)`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
+  // barchart's category axis is y (so its VALUE axis, needing the tick-step
+  // fix, is x); columnchart's category axis is x (so its value axis is y)
+  // — confirmed by reading both files' own `x-tick-step: none` / category
+  // tick-list placement.
+  const tickStepArg =
+    spec.chartType === "bar"
+      ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    `
+      : `y-tick-step: ${categoricalTickStep(spec.data)},\n    `;
   return `${header}
 #cetz.canvas({
   chart.${chartFn}(
@@ -153,7 +185,7 @@ ${boxes},
     value-key: "value",
     label-key: "label",
     size: ${size},
-    bar-style: ${paletteLiteral(spec.data)},
+    ${tickStepArg}bar-style: ${paletteLiteral(spec.data)},
   )
 })
 `;
