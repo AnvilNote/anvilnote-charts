@@ -5,7 +5,7 @@ import { buildFunctionPlotTypst, SIMPLE_PLOT_VERSION } from "./build-typst.js";
 test("generates an import pinned to the bundled simple-plot version", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
-    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 }],
     xMin: -10,
     xMax: 10,
     showGridlines: true,
@@ -14,12 +14,28 @@ test("generates an import pinned to the bundled simple-plot version", () => {
   assert.match(typ, new RegExp(`#import "@preview/simple-plot:${SIMPLE_PLOT_VERSION}": plot`));
 });
 
+test("splices each curve's own thickness into its stroke, not a hardcoded value", () => {
+  const typ = buildFunctionPlotTypst({
+    kind: "functionPlot",
+    curves: [
+      { formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 },
+      { formula: "cos(x)", color: "#595959", dash: "dashed", thickness: 3 },
+    ],
+    xMin: -10,
+    xMax: 10,
+    showGridlines: true,
+    showAxisTicks: true,
+  });
+  assert.match(typ, /thickness: 1\.5pt/);
+  assert.match(typ, /thickness: 3pt/);
+});
+
 test("includes one plot() curve entry per input curve, in order", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
     curves: [
-      { formula: "sin(x)", color: "#000000", dash: "solid" },
-      { formula: "cos(x)", color: "#595959", dash: "dashed" },
+      { formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 },
+      { formula: "cos(x)", color: "#595959", dash: "dashed", thickness: 1.5 },
     ],
     xMin: -10,
     xMax: 10,
@@ -36,7 +52,7 @@ test("includes one plot() curve entry per input curve, in order", () => {
 test("passes xmin/xmax through unchanged", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
-    curves: [{ formula: "x", color: "#000000", dash: "solid" }],
+    curves: [{ formula: "x", color: "#000000", dash: "solid", thickness: 1.5 }],
     xMin: -3.5,
     xMax: 7,
     showGridlines: true,
@@ -48,7 +64,7 @@ test("passes xmin/xmax through unchanged", () => {
 test("imports calc module names so bare sin/cos/etc. resolve in formulas", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
-    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 }],
     xMin: -10,
     xMax: 10,
     showGridlines: true,
@@ -60,7 +76,7 @@ test("imports calc module names so bare sin/cos/etc. resolve in formulas", () =>
 test("omits xtick/ytick args when showAxisTicks is true", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
-    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 }],
     xMin: -10,
     xMax: 10,
     showGridlines: true,
@@ -73,7 +89,7 @@ test("omits xtick/ytick args when showAxisTicks is true", () => {
 test("sets xtick/ytick to none when showAxisTicks is false", () => {
   const typ = buildFunctionPlotTypst({
     kind: "functionPlot",
-    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid", thickness: 1.5 }],
     xMin: -10,
     xMax: 10,
     showGridlines: true,

@@ -17,6 +17,11 @@ export const curveSchema = z.object({
     .regex(FORMULA_PATTERN, "Formula contains unsupported characters"),
   color: z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value"),
   dash: z.enum(DASH_VALUES),
+  // Stroke width in points. Defaulted (not required): added after the
+  // initial curve shape shipped, so older saved specs missing this field
+  // still validate — they get the same 1.5pt that was hardcoded in
+  // build-typst.ts before this field existed.
+  thickness: z.number().min(0.5).max(4).default(1.5),
 });
 
 export const functionPlotSpecSchema = z

@@ -36,7 +36,7 @@ export function buildFunctionPlotTypst(spec: FunctionPlotSpec): string {
   const curveArgs = spec.curves
     .map(
       (curve) =>
-        `  (fn: x => ${curve.formula}, stroke: (paint: rgb("${curve.color}"), thickness: 1.5pt, dash: "${curve.dash}"))`,
+        `  (fn: x => ${curve.formula}, stroke: (paint: rgb("${curve.color}"), thickness: ${curve.thickness}pt, dash: "${curve.dash}"))`,
     )
     .join(",\n");
 
