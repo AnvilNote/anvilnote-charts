@@ -3,9 +3,14 @@ import type { CategoricalEntry, StatsChartSpec } from "./schema.js";
 // Pinned to whatever versions are staged under
 // anvilnote-desktop/resources/typst-packages/preview/{cetz,cetz-plot}/<version>/
 // for offline use — same pattern as simple-plot (see function-plot's
-// build-typst.ts). cetz-plot depends on cetz directly, so both must be
-// bundled together.
-export const CETZ_VERSION = "0.4.2";
+// build-typst.ts). CETZ_VERSION is deliberately pinned to match
+// cetz-plot's OWN internal dependency (its src/cetz.typ does
+// `#import "@preview/cetz:0.4.0"`), not just "whatever the latest cetz
+// release is" — using a different cetz version for the outer
+// `cetz.canvas(...)` call than the one cetz-plot's internals were built
+// and tested against risks subtle incompatibilities even if it happens
+// to compile.
+export const CETZ_VERSION = "0.4.0";
 export const CETZ_PLOT_VERSION = "0.1.2";
 
 // Default grayscale cycle — AnvilNote's design language has zero color
