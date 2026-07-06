@@ -1,0 +1,31 @@
+{
+  "name": "anvilnote-charts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "CLI service for compiling AnvilNote function-plot specs to SVG via Typst + simple-plot.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "build:desktop": "node scripts/bundle-desktop.mjs",
+    "start": "node dist/cli.js",
+    "test": "tsx --test src/**/*.test.ts",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.62.0",
+    "@typescript-eslint/parser": "^8.62.0",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.4",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}
