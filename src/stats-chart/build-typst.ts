@@ -154,11 +154,24 @@ function hasLongLabels(entries: { label: string }[]): boolean {
   return entries.some((entry) => entry.label.length > LONG_LABEL_THRESHOLD);
 }
 
-// offset: .5cm (default is .15cm) pushes the rotated label further away
-// from its tick — at the default offset, a 45°-rotated label's top edge
-// visually intersects the bar directly above it (confirmed via a real
-// compile); the larger offset clears the bars entirely.
-const ROTATE_LABELS_STYLE = `cetz.draw.set-style(axes: (tick: (label: (angle: 45deg, offset: .5cm))))\n  `;
+// The label offset (distance from tick to rotated label) needs to scale
+// with the LONGEST label's length, not be one fixed constant — a longer
+// rotated string reaches further back up toward the bar directly above
+// its tick, so it needs proportionally more clearance to avoid visually
+// intersecting that bar; a short label needs much less. Confirmed via
+// real compiles at both ends: 4 entries with ~13-character labels needed
+// ~1.2cm to fully clear their bars, while a fixed .3cm-ish base is enough
+// for labels just past the rotation threshold.
+function rotatedLabelOffset(maxLabelLength: number): string {
+  const cm = Math.min(0.3 + maxLabelLength * 0.08, 2.5);
+  return `${cm.toFixed(2)}cm`;
+}
+
+function rotateLabelsStyle(entries: { label: string }[]): string {
+  const maxLabelLength = Math.max(...entries.map((entry) => entry.label.length));
+  const offset = rotatedLabelOffset(maxLabelLength);
+  return `cetz.draw.set-style(axes: (tick: (label: (angle: 45deg, offset: ${offset}))))\n  `;
+}
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
@@ -180,7 +193,7 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // FIRST entry throws "cannot compare auto and integer"), so the width
     // here must always be a concrete number.
     const width = scaledDimension(spec.data.length);
-    const rotateStyle = hasLongLabels(spec.data) ? ROTATE_LABELS_STYLE : "";
+    const rotateStyle = hasLongLabels(spec.data) ? rotateLabelsStyle(spec.data) : "";
     return `${header}
 #cetz.canvas({
   ${rotateStyle}chart.boxwhisker(
@@ -252,7 +265,7 @@ ${boxes},
   // Only columnchart's category labels run along the horizontal x-axis
   // (see hasLongLabels's own comment above for why barchart doesn't need
   // this).
-  const rotateStyle = spec.chartType === "column" && hasLongLabels(spec.data) ? ROTATE_LABELS_STYLE : "";
+  const rotateStyle = spec.chartType === "column" && hasLongLabels(spec.data) ? rotateLabelsStyle(spec.data) : "";
   return `${header}
 #cetz.canvas({
   ${rotateStyle}chart.${chartFn}(

@@ -183,16 +183,17 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
   assert.match(typ, /x-max: 100/);
 });
 
-test("column chart rotates labels 45deg when a label exceeds the long-label threshold", () => {
+test("column chart rotates labels 45deg when a label exceeds the long-label threshold, offset scaled to the longest label", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
     data: [
       { label: "Week2-Monday", value: 10 },
-      { label: "Week2-Tuesday", value: 20 },
+      { label: "Week2-Tuesday", value: 20 }, // 13 chars, the longer of the two
     ],
   });
-  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: \.5cm\)\)\)\)/);
+  // 0.3 + 13 * 0.08 = 1.34
+  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: 1\.34cm\)\)\)\)/);
 });
 
 test("column chart does not rotate labels when all labels are short", () => {
@@ -216,13 +217,40 @@ test("bar chart never rotates labels, even with long labels (category axis is ve
   assert.doesNotMatch(typ, /set-style/);
 });
 
-test("boxwhisker rotates labels 45deg when a label is long", () => {
+test("rotated label offset grows with the longest label, not a fixed amount", () => {
+  const shortish = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: "Weekday", value: 10 }], // 7 chars, just over the threshold
+  });
+  const longer = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: "Week2-Wednesday", value: 10 }], // 15 chars
+  });
+  // 0.3 + 7 * 0.08 = 0.86
+  assert.match(shortish, /offset: 0\.86cm/);
+  // 0.3 + 15 * 0.08 = 1.50 (toFixed(2) keeps the trailing zero)
+  assert.match(longer, /offset: 1\.50cm/);
+});
+
+test("rotated label offset is capped, not unbounded for extremely long labels", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    data: [{ label: "A".repeat(100), value: 10 }],
+  });
+  assert.match(typ, /offset: 2\.50cm/);
+});
+
+test("boxwhisker rotates labels 45deg when a label is long, offset scaled to its length", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "boxwhisker",
     data: [{ label: "Week2-Monday", min: 0, q1: 1, median: 2, q3: 3, max: 4 }],
   });
-  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: \.5cm\)\)\)\)/);
+  // "Week2-Monday" is 12 chars: 0.3 + 12 * 0.08 = 1.26
+  assert.match(typ, /cetz\.draw\.set-style\(axes: \(tick: \(label: \(angle: 45deg, offset: 1\.26cm\)\)\)\)/);
 });
 
 test("escapes double quotes in labels", () => {
