@@ -18,7 +18,18 @@ export function buildFunctionPlotTypst(spec: FunctionPlotSpec): string {
   // bounding box, since this .typ file's entire content IS the chart (not
   // embedded in a larger document) — standard technique for generating a
   // standalone SVG asset with Typst.
+  //
+  // Typst has no bare global `sin`/`cos`/`pow`/etc. — they only exist under
+  // the built-in `calc` module (`calc.sin(x)`, not `sin(x)`). Users typing a
+  // formula naturally write `sin(x)`, so import the common names out of
+  // `calc` into scope here (Typst supports `#import <module>: <names>` for
+  // built-in modules, not just file/package imports) rather than requiring
+  // everyone to type the `calc.` prefix themselves.
+  const CALC_IMPORTS =
+    "sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, pow, sqrt, exp, ln, log, abs, floor, ceil, round, min, max, pi, e";
+
   return `#import "@preview/simple-plot:${SIMPLE_PLOT_VERSION}": plot
+#import calc: ${CALC_IMPORTS}
 #set page(width: auto, height: auto, margin: 8pt)
 #plot(
   xmin: ${spec.xMin}, xmax: ${spec.xMax},

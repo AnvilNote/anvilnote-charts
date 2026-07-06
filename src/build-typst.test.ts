@@ -38,3 +38,13 @@ test("passes xmin/xmax through unchanged", () => {
   });
   assert.match(typ, /xmin: -3\.5, xmax: 7/);
 });
+
+test("imports calc module names so bare sin/cos/etc. resolve in formulas", () => {
+  const typ = buildFunctionPlotTypst({
+    curves: [{ formula: "sin(x)", color: "#000000", dash: "solid" }],
+    xMin: -10,
+    xMax: 10,
+    showGridlines: true,
+  });
+  assert.match(typ, /#import calc: sin, cos/);
+});
