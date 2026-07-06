@@ -19,7 +19,12 @@ function resolveColor(entry: CategoricalEntry, index: number): string {
 }
 
 function escapeTypstString(value: string): string {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r")
+    .replace(/\t/g, "\\t");
 }
 
 function categoricalDataLiteral(data: CategoricalEntry[]): string {
@@ -29,22 +34,34 @@ function categoricalDataLiteral(data: CategoricalEntry[]): string {
   return `(\n${rows},\n)`;
 }
 
-// bar/column/pyramid all validate their `bar-style`/`level-style` argument
-// as a "plot-style" — a palette FUNCTION (as returned by cetz's own
-// `palette.new(colors: (...))`), not a bare array of colors. Confirmed by a
-// real compile: passing a raw color array directly to bar-style fails with
-// "plot-style must be of type dictionary", while piechart's `slice-style`
-// (a separate, more lenient code path) accepts a bare array directly — the
-// two chart families don't share the same style-argument handling despite
-// looking similar in the docs.
-function paletteLiteral(data: CategoricalEntry[]): string {
+// bar/column validate their `bar-style` argument as a "plot-style" — a
+// palette FUNCTION (as returned by cetz's own `palette.new(colors: (...))`),
+// not a bare array of colors. Confirmed by a real compile: passing a raw
+// color array directly to bar-style fails with "plot-style must be of type
+// dictionary" (routed through cetz-plot's shared plot.plot machinery).
+// piechart's `slice-style` is a separate, more lenient code path that
+// accepts a bare array directly (colorArrayLiteral below). pyramid's own
+// `level-style` is more lenient too (its source branches on `type(...) ==
+// array` as well as `function`) — the palette.new() wrapper isn't strictly
+// required there, but is used anyway for consistency with bar/column since
+// it's already confirmed working.
+// Trailing comma is required, not cosmetic: Typst parses a parenthesized
+// expression with no comma as a grouping expression, not a 1-element
+// array — `(rgb("#000000"))` is just `rgb("#000000")`, while
+// `(rgb("#000000"),)` is the actual 1-element array cetz's palette.new()
+// (and piechart's slice-style) expects. Confirmed by a real compile: a
+// single-entry chart without this trailing comma fails inside
+// palette.new() with "type color has no method `len`" (bar/column/
+// pyramid) or "expected function, found none" (pie). The schema's
+// `data` array is `.min(1)`, so this must handle exactly one entry
+// correctly, not just two or more.
+function colorArrayLiteral(data: CategoricalEntry[]): string {
   const colors = data.map((entry, index) => `rgb("${resolveColor(entry, index)}")`).join(", ");
-  return `cetz.palette.new(colors: (${colors}))`;
+  return `(${colors},)`;
 }
 
-function pieColorArrayLiteral(data: CategoricalEntry[]): string {
-  const colors = data.map((entry, index) => `rgb("${resolveColor(entry, index)}")`).join(", ");
-  return `(${colors})`;
+function paletteLiteral(data: CategoricalEntry[]): string {
+  return `cetz.palette.new(colors: ${colorArrayLiteral(data)})`;
 }
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
@@ -95,7 +112,7 @@ ${boxes},
     value-key: "value",
     label-key: "label",
     radius: 2,
-    slice-style: ${pieColorArrayLiteral(spec.data)}${legendArg}
+    slice-style: ${colorArrayLiteral(spec.data)}${legendArg}
   )
 })
 `;

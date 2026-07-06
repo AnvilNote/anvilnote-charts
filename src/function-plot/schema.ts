@@ -21,11 +21,14 @@ export const curveSchema = z.object({
 
 export const functionPlotSpecSchema = z
   .object({
-    // Defaulted, not required: this discriminator was added when
-    // anvilnote-charts grew a second spec shape (stats-chart) sharing the
-    // same CLI/API entry point — a spec missing it entirely is always an
-    // (older-shaped) function-plot spec, so defaulting keeps every
-    // already-saved document's cached spec valid without a migration.
+    // Defaulted for convenience when parsing this schema directly (e.g. in
+    // this file's own tests) — NOT a backward-compat safety net at the
+    // outer `chartSpecSchema` discriminated union in schema.ts. Verified:
+    // z.discriminatedUnion picks a branch by reading the raw input's
+    // literal "kind" value directly; it does not try each candidate
+    // schema's own .default() to see if one would end up matching, so an
+    // input missing "kind" entirely fails union routing regardless of this
+    // default. Callers of the CLI/API MUST always send "kind" explicitly.
     kind: z.literal("functionPlot").default("functionPlot"),
     curves: z.array(curveSchema).min(1).max(6),
     xMin: z.number().finite(),

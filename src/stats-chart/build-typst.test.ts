@@ -23,7 +23,7 @@ test("bar chart uses chart.barchart with a palette built from resolved colors", 
   });
   assert.match(typ, /chart\.barchart\(/);
   assert.match(typ, /label: "Mon", value: 10/);
-  assert.match(typ, /cetz\.palette\.new\(colors: \(rgb\("#111111"\), rgb\("#404040"\)\)\)/);
+  assert.match(typ, /cetz\.palette\.new\(colors: \(rgb\("#111111"\), rgb\("#404040"\),\)\)/);
 });
 
 test("column chart uses chart.columnchart", () => {
@@ -49,7 +49,7 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
     showLegend: true,
   });
   assert.match(typ, /chart\.piechart\(/);
-  assert.match(typ, /slice-style: \(rgb\("#000000"\), rgb\("#404040"\)\)/);
+  assert.match(typ, /slice-style: \(rgb\("#000000"\), rgb\("#404040"\),\)/);
   assert.doesNotMatch(typ, /legend:/);
 });
 
@@ -103,4 +103,47 @@ test("escapes double quotes in labels", () => {
     data: [{ label: 'Say "hi"', value: 1 }],
   });
   assert.match(typ, /label: "Say \\"hi\\""/);
+});
+
+test("escapes newlines/tabs/carriage-returns in labels", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [{ label: "line1\nline2\ttabbed\r", value: 1 }],
+  });
+  assert.match(typ, /label: "line1\\nline2\\ttabbed\\r"/);
+  // The raw control characters must not appear literally in the output —
+  // an unescaped newline inside a Typst string literal breaks the parse.
+  assert.ok(!typ.includes("line1\nline2"));
+});
+
+// Regression test for a real bug: Typst parses a parenthesized expression
+// with no comma as a grouping expression, not a 1-element array —
+// `(rgb("#000000"))` is just `rgb("#000000")`, not a 1-item array. Every
+// chart type here uses `.min(1)` in its schema, so a single data point
+// must produce a valid array literal, not just two-or-more. This was
+// caught by an actual `typst compile` of the generated output (which
+// failed with "type color has no method `len`" / "expected function,
+// found none" before the trailing-comma fix) — the regexes below check
+// the same shape these compiles depend on.
+test("single-entry bar/column/pyramid palette produces a valid 1-element array (trailing comma)", () => {
+  const data = [{ label: "Solo", value: 1 }];
+  for (const chartType of ["bar", "column", "pyramid"] as const) {
+    const typ = buildStatsChartTypst({ kind: "statsChart", chartType, data });
+    assert.match(
+      typ,
+      /colors: \(rgb\("#000000"\),\)/,
+      `${chartType}: expected trailing comma in single-entry palette`,
+    );
+  }
+});
+
+test("single-entry pie slice-style produces a valid 1-element array (trailing comma)", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    data: [{ label: "Solo", value: 1 }],
+    showLegend: true,
+  });
+  assert.match(typ, /slice-style: \(rgb\("#000000"\),\)/);
 });
