@@ -657,7 +657,16 @@ test("contrastingTextColor picks white for dark slice fills and black for light 
 // canvas body — see AXIS_TICK_LABEL_CLEARANCE's own comment for why this
 // specific mechanism (not a "style:"/"bottom:" keyword arg, which has no
 // effect) was needed.
-test("bar/column/line/boxwhisker all set an explicit axis tick-label clearance style", () => {
+test("bar/column/line/boxwhisker emit no tick-label clearance override by default", () => {
+  // Real bug, caught via a live screenshot: an earlier version of this
+  // forced tick.label.offset to 1cm unconditionally, "fixing" a CJK
+  // label/bar overlap that was actually caused by a SEPARATE bug
+  // (ANVILNOTE_FONT_DIR unset, so Typst fell back to system CJK fonts
+  // with different metrics — see compile.ts's own fix). With the
+  // correct bundled fonts, cetz-plot's own built-in .15cm default has
+  // no overlap, and the 1cm override just pushed labels far below the
+  // axis instead. No override should be emitted unless yLabelRotated is
+  // explicitly false (see the next test).
   const data = [
     { label: "測試", value: 42 },
     { label: "你好", value: 78 },
@@ -671,10 +680,10 @@ test("bar/column/line/boxwhisker all set an explicit axis tick-label clearance s
     { kind: "statsChart", chartType: "line", fontFamily: "sans", ...axisLabelDefaults, data } as const,
   ]) {
     const typ = buildStatsChartTypst(spec as StatsChartSpec);
-    assert.match(
+    assert.doesNotMatch(
       typ,
-      /set-style\(axes: \(bottom: \(tick: \(label: \(offset: 1cm\)\)\), left: \(tick: \(label: \(offset: 1cm\)\)\)\)\)/,
-      `${spec.chartType} (showValues=${"showValues" in spec ? spec.showValues : "n/a"}) missing axis tick clearance`,
+      /set-style\(axes:/,
+      `${spec.chartType} (showValues=${"showValues" in spec ? spec.showValues : "n/a"}) should not override tick clearance`,
     );
   }
 
@@ -684,7 +693,23 @@ test("bar/column/line/boxwhisker all set an explicit axis tick-label clearance s
     fontFamily: "sans",
     data: [{ label: "測試", min: 10, q1: 20, median: 30, q3: 40, max: 50 }],
   });
-  assert.match(boxwhisker, /set-style\(axes: \(bottom:/);
+  assert.doesNotMatch(boxwhisker, /set-style\(axes:/);
+});
+
+test("column chart sets the y-axis label's own angle/offset override only when yLabelRotated is false", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    fontFamily: "sans",
+    showValues: false,
+    showGridLines: true,
+    showBorder: true,
+    xLabel: "",
+    yLabel: "Revenue",
+    yLabelRotated: false,
+    data: [{ label: "A", value: 1 }],
+  });
+  assert.match(typ, /set-style\(axes: \(left: \(label: \(angle: 0deg, offset: 1\.2cm\)\)\)\)/);
 });
 
 test("scatter chart plots raw (x, y) points with no connecting line", () => {

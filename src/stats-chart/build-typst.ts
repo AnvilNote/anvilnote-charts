@@ -36,35 +36,30 @@ const FONT_SET_TEXT: Record<"sans" | "serif", string> = {
   serif: `#set text(font: ${fontStackLiteral("serif")})`,
 };
 
-// Real bug caught via a real compile: CJK category-axis tick labels (e.g.
-// "測試", "你好") visually overlap the bar/plot area right at the axis
-// line, even for very short labels — NOT gated by hasLongLabels's own
-// rotation threshold, which only fires for labels over 6 characters. The
-// default tick-label offset (cetz-plot's own axes.typ default,
-// tick.label.offset: .15cm) is sized for Latin text; most CJK fonts have
-// taller ascent/descent than Latin ones, so that fixed clearance isn't
-// enough and the glyphs' ink visibly intrudes into the bar area.
-// Reproduced with Typst's own default font (no custom font override), so
-// this isn't specific to any one bundled font. `chart.barchart/
-// columnchart` don't expose a "style:" or "tick offset" parameter of
-// their own (their `..plot-args` only forwards to plot.plot's NAMED
-// args) — the only place this style key resolves from is cetz's AMBIENT
-// style context (ctx.style), set via `set-style` BEFORE the chart call,
-// confirmed via real compile (passing style/bottom/tick as direct
-// keyword args to chart.columnchart had no effect; set-style did).
-// Applied to both "bottom" (column/line's horizontal category axis) and
-// "left" (bar's vertical category axis) unconditionally — harmless extra
-// clearance on whichever axis carries numeric (not category) labels too.
-// yLabelAngleOverride (", label: (angle: 0deg)" for yLabelRotated:
-// false, else "") must be spliced INSIDE the "left" dict's own closing
-// paren, not appended as a second separate "left: (...)" entry — Typst
-// dict literals reject duplicate keys outright ("duplicate key: left",
-// a hard compile error), confirmed via a real compile.
+// Earlier version of this function forced tick.label.offset to 1cm on
+// both axes to fix CJK category labels visually overlapping the bar
+// area — that override was diagnosed and calibrated while
+// ANVILNOTE_FONT_DIR was unset in the dev environment (a separate real
+// bug, see compile.ts's own fix), so Typst was silently falling back to
+// SYSTEM CJK fonts with taller ascent/descent than the actual bundled
+// ones. Once the font bug was fixed, the 1cm override became far too
+// much clearance — labels rendered noticeably far below the axis
+// (caught via a live screenshot). Confirmed via real compiles with the
+// correct bundled fonts that cetz-plot's own built-in default
+// (tick.label.offset: .15cm) already has zero overlap for CJK text, so
+// this override is removed entirely; only the yLabelAngleOverride
+// splice (for yLabelRotated: false) still needs a set-style call, and
+// only when actually provided — an unconditional call for a no-op
+// override would just be dead weight.
 function axisTickLabelClearance(yLabelAngleOverride = ""): string {
-  const leftDictContents = `tick: (label: (offset: 1cm))${yLabelAngleOverride}`;
+  if (!yLabelAngleOverride) return "";
+  // yLabelAngleOverride is a top-level axis "label:" fragment (the
+  // AXIS's own label, e.g. "Revenue" — not "tick.label", the per-tick
+  // numbers), already formatted as ", label: (angle: ..., offset: ...)"
+  // by axisLabelArgs — splice it directly as the "left" dict's content.
   return [
     `import cetz.draw: set-style`,
-    `set-style(axes: (bottom: (tick: (label: (offset: 1cm))), left: (${leftDictContents})))`,
+    `set-style(axes: (left: (${yLabelAngleOverride.replace(/^, /, "")})))`,
   ].join("\n  ");
 }
 
