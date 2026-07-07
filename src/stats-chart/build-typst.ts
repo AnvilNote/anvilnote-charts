@@ -575,7 +575,6 @@ function lowess(points: ScatterEntry[]): { x: number; y: number }[] {
 // buildStatsChartTypst's line branch), and there's no per-point `color`
 // field in scatterEntrySchema to override it with anyway.
 const SCATTER_POINT_COLOR = DEFAULT_COLOR_CYCLE[0];
-const TREND_LINE_COLOR = DEFAULT_COLOR_CYCLE[2];
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   // `plot` (not just `chart`) is needed by: the custom showValues
@@ -754,7 +753,7 @@ ${pointTuples},
         trendLinePlotAdd = `
       plot.add(
         ((${xMin}, ${p1}), (${xMax}, ${p2})),
-        style: (stroke: rgb("${TREND_LINE_COLOR}") + 2pt),
+        style: (stroke: rgb("${spec.trendLineColor}") + 2pt),
       )`;
       }
     } else if (spec.trendLine === "lowess") {
@@ -766,7 +765,7 @@ ${pointTuples},
 ${smoothedTuples},
         ),
         line: "spline",
-        style: (stroke: rgb("${TREND_LINE_COLOR}") + 2pt),
+        style: (stroke: rgb("${spec.trendLineColor}") + 2pt),
       )`;
     }
 

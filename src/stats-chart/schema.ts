@@ -126,12 +126,17 @@ const lineChartSchema = categoricalBase.extend({ chartType: z.literal("line"), .
 // line; better for data with a curved or non-monotonic relationship.
 // Both computed from the data itself in build-typst.ts, not user-entered.
 const TREND_LINE_KINDS = ["none", "linear", "lowess"] as const;
+// User-pickable trend-line color, separate from the scatter points' own
+// SCATTER_POINT_COLOR — defaulted (not required) so a spec predating this
+// field still validates; build-typst.ts falls back to its own
+// TREND_LINE_COLOR constant when this is left at the default gray.
 const scatterChartSchema = z.object({
   kind: z.literal("statsChart"),
   chartType: z.literal("scatter"),
   data: z.array(scatterEntrySchema).min(1).max(SCATTER_MAX_ENTRIES),
   fontFamily: fontFamilySchema,
   trendLine: z.enum(TREND_LINE_KINDS).default("none"),
+  trendLineColor: z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value").default("#737373"),
   ...axisLabelFields,
 });
 // Where (if at all) each slice's share of the total is displayed:

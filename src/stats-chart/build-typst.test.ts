@@ -617,3 +617,61 @@ test("bar/column/line/boxwhisker all set an explicit axis tick-label clearance s
   });
   assert.match(boxwhisker, /set-style\(axes: \(bottom:/);
 });
+
+test("scatter chart plots raw (x, y) points with no connecting line", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [
+      { x: 1, y: 2 },
+      { x: 2, y: 4 },
+      { x: 3, y: 3 },
+    ],
+  });
+  assert.match(typ, /plot\.add\(/);
+  assert.match(typ, /style: \(stroke: none\)/);
+  assert.match(typ, /\(1, 2\)/);
+  assert.doesNotMatch(typ, /trend/i);
+});
+
+test("scatter chart's linear trend line uses the user-chosen trendLineColor, not a fixed default", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "linear",
+    trendLineColor: "#ff0000",
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [
+      { x: 0, y: 0 },
+      { x: 1, y: 2 },
+      { x: 2, y: 4 },
+      { x: 3, y: 6 },
+    ],
+  });
+  assert.match(typ, /stroke: rgb\("#ff0000"\) \+ 2pt/);
+});
+
+test("scatter chart's lowess trend line also uses the user-chosen trendLineColor", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "lowess",
+    trendLineColor: "#00ff00",
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: Array.from({ length: 10 }, (_, i) => ({ x: i, y: i * i })),
+  });
+  assert.match(typ, /stroke: rgb\("#00ff00"\) \+ 2pt/);
+  assert.match(typ, /line: "spline"/);
+});
