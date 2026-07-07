@@ -1,4 +1,4 @@
-import type { CategoricalEntry, ScatterEntry, StatsChartSpec } from "./schema.js";
+import type { CategoricalEntry, ScatterEntry, StackedEntry, StatsChartSpec } from "./schema.js";
 
 // Pinned to whatever versions are staged under
 // anvilnote-desktop/resources/typst-packages/preview/{cetz,cetz-plot}/<version>/
@@ -354,6 +354,63 @@ function categoricalAxisMax(data: CategoricalEntry[]): number {
   const maxValue = Math.max(...data.map((entry) => entry.value));
   const step = categoricalTickStep(data);
   return Math.ceil(maxValue / step) * step;
+}
+
+// Stacked bar/column's own data literal: one dict row per entry, with a
+// key per SERIES ("v0", "v1", ...) instead of categoricalDataLiteral's
+// single "value" key — cetz-plot's stacked mode reads a fixed value-key
+// ARRAY (see schema.ts's stackedEntrySchema comment for why values.length
+// must match seriesLabels.length).
+function stackedDataLiteral(data: StackedEntry[]): string {
+  const rows = data
+    .map((entry) => {
+      const valuePairs = entry.values.map((v, i) => `v${i}: ${v}`).join(", ");
+      return `  (label: "${escapeTypstString(entry.label)}", ${valuePairs})`;
+    })
+    .join(",\n");
+  return `(\n${rows},\n)`;
+}
+
+function stackedValueKeysLiteral(seriesCount: number): string {
+  return `(${Array.from({ length: seriesCount }, (_, i) => `"v${i}"`).join(", ")})`;
+}
+
+// One color PER SERIES (not per entry, unlike bar/column/pie's own
+// resolveColor) — a stacked chart's legend/segment colors are keyed by
+// which series a segment belongs to, the same segment color repeating
+// across every bar. Falls back to the same DEFAULT_COLOR_CYCLE used
+// elsewhere when seriesColors is omitted or shorter than seriesLabels.
+function seriesColorArrayLiteral(seriesLabels: string[], seriesColors: string[] | undefined): string {
+  const colors = seriesLabels
+    .map((_, index) => `rgb("${seriesColors?.[index] ?? DEFAULT_COLOR_CYCLE[index % DEFAULT_COLOR_CYCLE.length]}")`)
+    .join(", ");
+  return `(${colors},)`;
+}
+
+function seriesPaletteLiteral(seriesLabels: string[], seriesColors: string[] | undefined): string {
+  return `cetz.palette.new(colors: ${seriesColorArrayLiteral(seriesLabels, seriesColors)})`;
+}
+
+// `[#"literal string"]` markup-injection-safety wrapping, same reasoning
+// as rotatedXTicksLiteral/plainTicksLiteral's own comments — series
+// names are free-form user text with no character whitelist.
+function seriesLabelsLiteral(seriesLabels: string[]): string {
+  return `(${seriesLabels.map((label) => `[#"${escapeTypstString(label)}"]`).join(", ")})`;
+}
+
+// Stacked bar/column's tick step/max are computed from each entry's
+// SUM across all series (the full bar height once stacked), not any
+// single series' own value — same "aim for ~5 ticks, round up to a full
+// final gridline" reasoning as categoricalTickStep/categoricalAxisMax.
+function stackedTickStep(data: StackedEntry[]): number {
+  const maxTotal = Math.max(...data.map((entry) => entry.values.reduce((sum, v) => sum + v, 0)));
+  return niceTickStep(Math.abs(maxTotal));
+}
+
+function stackedAxisMax(data: StackedEntry[]): number {
+  const maxTotal = Math.max(...data.map((entry) => entry.values.reduce((sum, v) => sum + v, 0)));
+  const step = stackedTickStep(data);
+  return Math.ceil(maxTotal / step) * step;
 }
 
 // Scatter's own tick step, restricted to a "10 per decade" step only

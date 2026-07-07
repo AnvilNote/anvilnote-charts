@@ -165,18 +165,75 @@ const boxWhiskerChartSchema = z.object({
   fontFamily: fontFamilySchema,
 });
 
-export const statsChartSpecSchema = z.discriminatedUnion("chartType", [
-  barChartSchema,
-  columnChartSchema,
-  pieChartSchema,
-  lineChartSchema,
-  scatterChartSchema,
-  boxWhiskerChartSchema,
-]);
+// Stacked bar/column's own data shape: each entry is one CATEGORY (e.g.
+// "Q1") with one numeric value PER SERIES (e.g. [productA, productB,
+// productC]) — genuinely different from categoricalEntrySchema's single
+// (label, value) pair, since a stacked bar segments each bar by series.
+// values.length must match seriesLabels.length exactly (enforced by the
+// schema's own .refine below) — cetz-plot's stacked mode reads a fixed
+// set of value-keys per row, so a short/long row would either silently
+// drop a series or crash on a missing key.
+const MAX_SERIES = 6;
+const stackedEntrySchema = z.object({
+  label: z.string().min(1).max(LABEL_MAX_LEN),
+  values: z.array(z.number().finite()).min(1).max(MAX_SERIES),
+});
+
+// seriesColors is optional (falls back to the same DEFAULT_COLOR_CYCLE
+// build-typst.ts uses elsewhere, one color per SERIES not per entry —
+// see build-typst.ts's stacked branch) — a per-series legend swatch
+// color, not a per-entry one.
+const stackedChartBase = z.object({
+  kind: z.literal("statsChart"),
+  data: z.array(stackedEntrySchema).min(1).max(MAX_ENTRIES),
+  seriesLabels: z.array(z.string().min(1).max(LABEL_MAX_LEN)).min(1).max(MAX_SERIES),
+  seriesColors: z
+    .array(z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value"))
+    .max(MAX_SERIES)
+    .optional(),
+  showLegend: z.boolean().default(true),
+  showGridLines: z.boolean().default(true),
+  fontFamily: fontFamilySchema,
+  ...axisLabelFields,
+});
+
+const stackedBarChartSchema = stackedChartBase.extend({ chartType: z.literal("stackedBar") });
+const stackedColumnChartSchema = stackedChartBase.extend({ chartType: z.literal("stackedColumn") });
+
+// z.discriminatedUnion requires every member to be a plain ZodObject (not
+// a ZodEffects), so the "each entry's values.length must match
+// seriesLabels.length" invariant can't live on the individual stacked
+// schemas via .superRefine — it's enforced here instead, on the whole
+// union, after the union itself has already picked the right branch by
+// chartType.
+export const statsChartSpecSchema = z
+  .discriminatedUnion("chartType", [
+    barChartSchema,
+    columnChartSchema,
+    pieChartSchema,
+    lineChartSchema,
+    scatterChartSchema,
+    boxWhiskerChartSchema,
+    stackedBarChartSchema,
+    stackedColumnChartSchema,
+  ])
+  .superRefine((spec, ctx) => {
+    if (spec.chartType !== "stackedBar" && spec.chartType !== "stackedColumn") return;
+    for (const [index, entry] of spec.data.entries()) {
+      if (entry.values.length !== spec.seriesLabels.length) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Entry ${index} has ${entry.values.length} values but seriesLabels has ${spec.seriesLabels.length}`,
+          path: ["data", index, "values"],
+        });
+      }
+    }
+  });
 
 export type CategoricalEntry = z.infer<typeof categoricalEntrySchema>;
 export type ScatterEntry = z.infer<typeof scatterEntrySchema>;
 export type BoxWhiskerEntry = z.infer<typeof boxWhiskerEntrySchema>;
+export type StackedEntry = z.infer<typeof stackedEntrySchema>;
 export type StatsChartSpec = z.infer<typeof statsChartSpecSchema>;
 export type FontFamily = z.infer<typeof fontFamilySchema>;
-export { FONT_FAMILIES };
+export { FONT_FAMILIES, MAX_SERIES };
