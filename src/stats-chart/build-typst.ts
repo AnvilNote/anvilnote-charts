@@ -51,16 +51,44 @@ const FONT_SET_TEXT: Record<"sans" | "serif", string> = {
 // splice (for yLabelRotated: false) still needs a set-style call, and
 // only when actually provided — an unconditional call for a no-op
 // override would just be dead weight.
-function axisTickLabelClearance(yLabelAngleOverride = ""): string {
-  if (!yLabelAngleOverride) return "";
-  // yLabelAngleOverride is a top-level axis "label:" fragment (the
-  // AXIS's own label, e.g. "Revenue" — not "tick.label", the per-tick
-  // numbers), already formatted as ", label: (angle: ..., offset: ...)"
-  // by axisLabelArgs — splice it directly as the "left" dict's content.
-  return [
-    `import cetz.draw: set-style`,
-    `set-style(axes: (left: (${yLabelAngleOverride.replace(/^, /, "")})))`,
-  ].join("\n  ");
+// Extra gap between legend swatch rows, in cetz canvas units (== cm at
+// this feature's own default scale) — approximates 1em at this chart
+// text's typical size, per explicit feedback ("約 1em"). cetz-plot's own
+// item.spacing default is 0 (rows packed tight, confirmed via a real
+// compile), so ANY chart with a visible legend gets this override, not
+// just stacked/pie specifically.
+const LEGEND_ITEM_SPACING = 0.4;
+
+function legendStyleOverride(hideLegendBorder: boolean): string {
+  // Both stroke and item.spacing live under the same "legend" style key —
+  // merged into one dict here rather than two separate overrides.
+  const parts = [`item: (spacing: ${LEGEND_ITEM_SPACING})`];
+  if (hideLegendBorder) {
+    // cetz-plot's legend has its own default `stroke: black` (a frame
+    // drawn around the swatch box) baked into plot/legend.typ's own
+    // default-style dict, entirely separate from bar-style's own stroke
+    // (which showBorder already controls) — confirmed via a real compile
+    // that stacked charts' legend box kept its border even with
+    // showBorder off, until this override.
+    parts.push("stroke: none");
+  }
+  return `legend: (${parts.join(", ")})`;
+}
+
+function axisTickLabelClearance(yLabelAngleOverride = "", legendOptions?: { hideBorder: boolean }): string {
+  const overrides: string[] = [];
+  if (yLabelAngleOverride) {
+    // yLabelAngleOverride is a top-level axis "label:" fragment (the
+    // AXIS's own label, e.g. "Revenue" — not "tick.label", the per-tick
+    // numbers), already formatted as ", label: (angle: ..., offset: ...)"
+    // by axisLabelArgs — splice it directly as the "left" dict's content.
+    overrides.push(`axes: (left: (${yLabelAngleOverride.replace(/^, /, "")}))`);
+  }
+  if (legendOptions) {
+    overrides.push(legendStyleOverride(legendOptions.hideBorder));
+  }
+  if (overrides.length === 0) return "";
+  return [`import cetz.draw: set-style`, `set-style(${overrides.join(", ")})`].join("\n  ");
 }
 
 // Economist-style default cycle — per explicit feedback replacing the
@@ -799,8 +827,14 @@ ${boxes},
         : spec.showPercentage === "onSlice"
           ? innerLabelPercentageArg(spec.data)
           : "";
+    // Pie has no showBorder toggle of its own (unlike stacked charts), so
+    // hideBorder is always false here — pie's legend keeps cetz-plot's
+    // own default border regardless; only the item spacing is added.
+    const legendStyleSetup = spec.showLegend
+      ? `\n  import cetz.draw: set-style\n  set-style(${legendStyleOverride(false)})`
+      : "";
     return `${header}
-#cetz.canvas({
+#cetz.canvas({${legendStyleSetup}
   chart.piechart(
     ${dataLiteral},
     value-key: "value",
@@ -975,7 +1009,7 @@ ${pointTuples},
 
     return `${header}
 #cetz.canvas({
-  ${axisTickLabelClearance(leftAngleOverride)}
+  ${axisTickLabelClearance(leftAngleOverride, spec.showLegend ? { hideBorder: !spec.showBorder } : undefined)}
   chart.${chartFn}(
     ${dataLiteral},
     value-key: ${valueKeys},
