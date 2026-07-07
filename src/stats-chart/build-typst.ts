@@ -68,11 +68,18 @@ function axisTickLabelClearance(yLabelAngleOverride = ""): string {
   ].join("\n  ");
 }
 
-// Default grayscale cycle — AnvilNote's design language has zero color
-// hues (see function-plot's own DASH_CYCLE/COLOR_CYCLE rationale), so new
-// entries default to shades of gray instead of introducing hues; a
-// per-entry `color` override still lets a user repaint any single slice/bar.
-const DEFAULT_COLOR_CYCLE = ["#000000", "#404040", "#737373", "#a6a6a6", "#d9d9d9"];
+// Economist-style default cycle — per explicit feedback replacing the
+// earlier pure grayscale cycle. Anchored on the Economist's own signature
+// red (#E3120B) as the primary data color, with near-black and two gray
+// shades for supporting series, plus two lighter/desaturated reds for
+// when more than 3 series need distinguishing — mirrors the "primary
+// series gets full red, supporting data gets light gray or desaturated
+// red" hierarchy described at
+// https://aecharts.com/blog/posts/how-to-create-charts-like-the-economist/.
+// 6 colors total, matching MAX_SERIES (stacked charts' own series cap) so
+// a maximally-stacked chart never has to repeat a color. A per-entry
+// `color` override still lets a user repaint any single slice/bar.
+const DEFAULT_COLOR_CYCLE = ["#E3120B", "#0D0D0D", "#999999", "#FF6B6B", "#BBBBBB", "#FF9999"];
 
 function resolveColor(entry: CategoricalEntry, index: number): string {
   return entry.color ?? DEFAULT_COLOR_CYCLE[index % DEFAULT_COLOR_CYCLE.length];

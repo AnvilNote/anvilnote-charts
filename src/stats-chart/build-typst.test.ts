@@ -36,7 +36,7 @@ test("bar chart uses chart.barchart with a palette built from resolved colors", 
   });
   assert.match(typ, /chart\.barchart\(/);
   assert.match(typ, /label: "Mon", value: 10/);
-  assert.match(typ, /cetz\.palette\.new\(colors: \(rgb\("#111111"\), rgb\("#404040"\),\)\)/);
+  assert.match(typ, /cetz\.palette\.new\(colors: \(rgb\("#111111"\), rgb\("#0D0D0D"\),\)\)/);
 });
 
 test("column chart uses chart.columnchart", () => {
@@ -117,7 +117,7 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
     showPercentage: "none",
   });
   assert.match(typ, /chart\.piechart\(/);
-  assert.match(typ, /slice-style: \(rgb\("#000000"\), rgb\("#404040"\),\)/);
+  assert.match(typ, /slice-style: \(rgb\("#E3120B"\), rgb\("#0D0D0D"\),\)/);
   assert.doesNotMatch(typ, /legend:/);
 });
 
@@ -458,7 +458,7 @@ test("single-entry bar/column palette produces a valid 1-element array (trailing
     } as StatsChartSpec);
     assert.match(
       typ,
-      /colors: \(rgb\("#000000"\),\)/,
+      /colors: \(rgb\("#E3120B"\),\)/,
       `${chartType}: expected trailing comma in single-entry palette`,
     );
   }
@@ -473,7 +473,7 @@ test("single-entry pie slice-style produces a valid 1-element array (trailing co
     showLegend: true,
     showPercentage: "none",
   });
-  assert.match(typ, /slice-style: \(rgb\("#000000"\),\)/);
+  assert.match(typ, /slice-style: \(rgb\("#E3120B"\),\)/);
 });
 
 test("column/bar showValues bypasses chart.columnchart/barchart and annotates each bar with its value", () => {
@@ -596,9 +596,9 @@ test("pie showPercentage: onSlice keeps labels plain and adds an inner-label loo
   // black text is invisible against this feature's own default near-
   // black slice colors).
   assert.match(typ, /inner-label: \(content: \(value, label\) =>/);
-  // Default color cycle's first 3 entries (#000000, #404040, #737373) are
-  // all dark enough that white is the correct contrast choice for all
-  // three here.
+  // Default color cycle's first 3 entries (#E3120B, #0D0D0D, #999999) are
+  // all dark enough (luminance < 0.4) that white is the correct contrast
+  // choice for all three here.
   assert.match(typ, /"A": \(pct: "33\.34%", color: white\)/);
   assert.match(typ, /"B": \(pct: "33\.33%", color: white\)/);
   assert.match(typ, /"C": \(pct: "33\.33%", color: white\)/);
@@ -606,8 +606,8 @@ test("pie showPercentage: onSlice keeps labels plain and adds an inner-label loo
 
 test("contrastingTextColor picks white for dark slice fills and black for light ones", () => {
   // Exercised indirectly through the pie onSlice path, using the default
-  // color cycle's full range (including its lightest entry, #d9d9d9,
-  // which needs BLACK text, unlike the darker entries above).
+  // color cycle's full range (including its 5th entry, #BBBBBB, which
+  // needs BLACK text, unlike the darker entries above).
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     fontFamily: "sans",
