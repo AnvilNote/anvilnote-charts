@@ -494,6 +494,19 @@ function scaledDimension(entryCount: number): number {
 // bumped from 6 to 8 per explicit feedback that charts felt too short.
 const BASE_VALUE_AXIS_DIMENSION = 8;
 
+// User-overridable width/height (schema.ts's own customSizeFields) —
+// independent per axis: either can be set without the other, in which
+// case the auto-computed value for that one axis is kept. Applied at
+// every chart type's own `size:` call site, replacing whichever
+// auto-computed dimension(s) the user has overridden.
+function resolveSize(
+  autoWidth: number,
+  autoHeight: number,
+  spec: { width?: number; height?: number },
+): { width: number; height: number } {
+  return { width: spec.width ?? autoWidth, height: spec.height ?? autoHeight };
+}
+
 // Long category labels along a horizontal axis overlap each other well
 // before the chart itself runs out of room (confirmed visually: 4 entries
 // like "Week2-Monday" already collide at the default horizontal
@@ -730,7 +743,7 @@ ${FONT_SET_TEXT[spec.fontFamily]}`;
     // resolves for the SECOND size entry (verified: passing `auto` for the
     // FIRST entry throws "cannot compare auto and integer"), so the width
     // here must always be a concrete number.
-    const width = scaledDimension(spec.data.length);
+    const { width, height } = resolveSize(scaledDimension(spec.data.length), BASE_VALUE_AXIS_DIMENSION, spec);
     // Our own box data literal above uses 1-based x positions (x: index+1),
     // so the tick-position override must match that, not start at 0.
     const rotateTicksArg = hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 1) : "";
@@ -745,7 +758,7 @@ ${FONT_SET_TEXT[spec.fontFamily]}`;
 #cetz.canvas({
   ${axisTickLabelClearance()}
   chart.boxwhisker(
-    size: (${width}, ${BASE_VALUE_AXIS_DIMENSION}),
+    size: (${width}, ${height}),
     label-key: "label",
     y-min: 0,
     y-format: ${MATH_TICK_FORMAT},
@@ -759,6 +772,17 @@ ${boxes},
 
   if (spec.chartType === "pie") {
     const dataLiteral = categoricalDataLiteral(spec.data);
+    // chart.piechart has no `size: (w, h)` tuple of its own (just a single
+    // `radius`, confirmed by reading its own source) — a circle's width
+    // and height are the same thing, so the custom width/height override
+    // maps to radius = min(width, height) / 2 when either is set (using
+    // the SMALLER one keeps the whole circle within both bounds rather
+    // than overflowing one axis). Falls back to the existing fixed
+    // radius: 3 default when neither is set.
+    const radius =
+      spec.width !== undefined || spec.height !== undefined
+        ? Math.min(spec.width ?? spec.height!, spec.height ?? spec.width!) / 2
+        : 3;
     // legend: (label: none) is how cetz-plot's piechart suppresses its
     // otherwise-automatic legend (it renders as soon as any entry has a
     // label) — confirmed by a real compile; there's no separate boolean
@@ -781,7 +805,7 @@ ${boxes},
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
-    radius: 3,
+    radius: ${radius},
     slice-style: ${colorArrayLiteral(spec.data)}${legendArg}${percentageArg}
   )
 })
@@ -804,7 +828,7 @@ ${boxes},
     const lineColor = resolveColor(spec.data[0], 0);
     const n = spec.data.length;
     const axisMax = categoricalAxisMax(spec.data);
-    const entryAxisDimension = scaledDimension(n);
+    const { width, height } = resolveSize(scaledDimension(n), BASE_VALUE_AXIS_DIMENSION, spec);
     const pointTuples = spec.data.map((entry, index) => `      (${index}, ${entry.value})`).join(",\n");
     const ticksLiteral = hasLongLabels(spec.data)
       ? spec.data
@@ -824,7 +848,7 @@ ${boxes},
 #cetz.canvas({
   ${axisTickLabelClearance(leftAngleOverride)}
   plot.plot(
-    size: (${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION}),
+    size: (${width}, ${height}),
     axis-style: "scientific-auto",
     y-grid: true,
     y-tick-step: ${categoricalTickStep(spec.data)},
@@ -860,6 +884,7 @@ ${pointTuples},
     const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
     const xAxis = scatterAxisConfig(spec.data.map((p) => p.x));
     const yAxis = scatterAxisConfig(spec.data.map((p) => p.y));
+    const { width, height } = resolveSize(12, 8, spec);
 
     // "linear": one straight line spanning the data's own x-range (2
     // points is enough for cetz-plot's own "linear" line-mode to draw a
@@ -898,7 +923,7 @@ ${smoothedTuples},
 #cetz.canvas({
   ${axisTickLabelClearance(leftAngleOverride)}
   plot.plot(
-    size: (12, 8),
+    size: (${width}, ${height}),
     axis-style: "scientific-auto",
     x-grid: ${spec.showGridLines},
     y-grid: ${spec.showGridLines},
@@ -929,10 +954,12 @@ ${pointTuples},
   if (spec.chartType === "stackedBar" || spec.chartType === "stackedColumn") {
     const dataLiteral = stackedDataLiteral(spec.data);
     const entryAxisDimension = scaledDimension(spec.data.length);
-    const size =
+    const [autoWidth, autoHeight] =
       spec.chartType === "stackedBar"
-        ? `(${BASE_VALUE_AXIS_DIMENSION}, ${entryAxisDimension})`
-        : `(${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION})`;
+        ? [BASE_VALUE_AXIS_DIMENSION, entryAxisDimension]
+        : [entryAxisDimension, BASE_VALUE_AXIS_DIMENSION];
+    const { width, height } = resolveSize(autoWidth, autoHeight, spec);
+    const size = `(${width}, ${height})`;
     const chartFn = spec.chartType === "stackedBar" ? "barchart" : "columnchart";
     const valueKeys = stackedValueKeysLiteral(spec.seriesLabels.length);
     const valueAxisArgs =
@@ -970,10 +997,16 @@ ${pointTuples},
   // between the two, same reasoning as boxwhisker's width above.
   const dataLiteral = categoricalDataLiteral(spec.data);
   const entryAxisDimension = scaledDimension(spec.data.length);
-  const size =
+  const [autoBarColumnWidth, autoBarColumnHeight] =
     spec.chartType === "bar"
-      ? `(${BASE_VALUE_AXIS_DIMENSION}, ${entryAxisDimension})`
-      : `(${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION})`;
+      ? [BASE_VALUE_AXIS_DIMENSION, entryAxisDimension]
+      : [entryAxisDimension, BASE_VALUE_AXIS_DIMENSION];
+  const { width: barColumnWidth, height: barColumnHeight } = resolveSize(
+    autoBarColumnWidth,
+    autoBarColumnHeight,
+    spec,
+  );
+  const size = `(${barColumnWidth}, ${barColumnHeight})`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
   // barchart's category axis is y (so its VALUE axis, needing the
   // tick-step/max/grid/format fixes, is x); columnchart's category axis

@@ -90,6 +90,22 @@ const axisLabelFields = {
   yLabelRotated: z.boolean().default(true),
 };
 
+// User-overridable chart dimensions, in cm (Typst's own unit for cetz's
+// `size:` tuple — no conversion needed at the build-typst.ts call sites).
+// Optional and independent of each other: either can be set without the
+// other, in which case build-typst.ts's own auto-computed dimension
+// (scaledDimension/BASE_VALUE_AXIS_DIMENSION, or the fixed 12x8 for
+// scatter) is used for the unset axis — NOT an all-or-nothing pair. Every
+// chart type gets this (spread into each schema below, including pie/
+// scatter which don't share categoricalBase), since they all ultimately
+// funnel into some form of `size: (w, h)`. Clamped to a sane range so a
+// stray huge value can't blow up the PDF layout; 50cm is comfortably
+// larger than a page's own printable width/height.
+const customSizeFields = {
+  width: z.number().min(1).max(50).optional(),
+  height: z.number().min(1).max(50).optional(),
+};
+
 // showValues: prints each bar/column's own value above/beside it (rounded
 // to at most 2 decimal places — see build-typst.ts's formatValueLabel).
 // Defaulted false (not required): added after the initial spec shape
@@ -111,6 +127,7 @@ const barChartSchema = categoricalBase.extend({
   showGridLines: z.boolean().default(true),
   showBorder: z.boolean().default(true),
   ...axisLabelFields,
+  ...customSizeFields,
 });
 const columnChartSchema = categoricalBase.extend({
   chartType: z.literal("column"),
@@ -118,6 +135,7 @@ const columnChartSchema = categoricalBase.extend({
   showGridLines: z.boolean().default(true),
   showBorder: z.boolean().default(true),
   ...axisLabelFields,
+  ...customSizeFields,
 });
 // Point-connected line over the same categorical (label, value) data shape
 // as bar/column — NOT a continuous function-plot; x positions are just
@@ -125,7 +143,11 @@ const columnChartSchema = categoricalBase.extend({
 // single connected line has one color (not one per point), only the
 // FIRST entry's resolved color (or the default cycle's first color) is
 // actually used — see build-typst.ts's lineChart branch.
-const lineChartSchema = categoricalBase.extend({ chartType: z.literal("line"), ...axisLabelFields });
+const lineChartSchema = categoricalBase.extend({
+  chartType: z.literal("line"),
+  ...axisLabelFields,
+  ...customSizeFields,
+});
 
 // "linear": ordinary least-squares straight-line fit.
 // "lowess": locally weighted scatterplot smoothing — a non-linear curve
@@ -148,6 +170,7 @@ const scatterChartSchema = z.object({
   // showGridLines, defaulted true (existing behavior unchanged).
   showGridLines: z.boolean().default(true),
   ...axisLabelFields,
+  ...customSizeFields,
 });
 // Where (if at all) each slice's share of the total is displayed:
 //   - "none": no percentage shown
@@ -163,6 +186,7 @@ const pieChartSchema = categoricalBase.extend({
   chartType: z.literal("pie"),
   showLegend: z.boolean().default(true),
   showPercentage: z.enum(PERCENTAGE_PLACEMENTS).default("none"),
+  ...customSizeFields,
 });
 
 const boxWhiskerChartSchema = z.object({
@@ -170,6 +194,7 @@ const boxWhiskerChartSchema = z.object({
   chartType: z.literal("boxwhisker"),
   data: z.array(boxWhiskerEntrySchema).min(1).max(MAX_ENTRIES),
   fontFamily: fontFamilySchema,
+  ...customSizeFields,
 });
 
 // Stacked bar/column's own data shape: each entry is one CATEGORY (e.g.
@@ -203,6 +228,7 @@ const stackedChartBase = z.object({
   showBorder: z.boolean().default(true),
   fontFamily: fontFamilySchema,
   ...axisLabelFields,
+  ...customSizeFields,
 });
 
 const stackedBarChartSchema = stackedChartBase.extend({ chartType: z.literal("stackedBar") });

@@ -152,3 +152,33 @@ test("rejects an unknown chartType", () => {
     }),
   );
 });
+
+test("accepts optional width/height overrides, independent of each other", () => {
+  const parsed = statsChartSpecSchema.parse({
+    kind: "statsChart",
+    chartType: "bar",
+    data: [{ label: "Mon", value: 10 }],
+    width: 15,
+  });
+  assert.equal(parsed.chartType === "bar" && parsed.width, 15);
+  assert.equal(parsed.chartType === "bar" && parsed.height, undefined);
+});
+
+test("rejects width/height outside the 1-50cm range", () => {
+  assert.throws(() =>
+    statsChartSpecSchema.parse({
+      kind: "statsChart",
+      chartType: "column",
+      data: [{ label: "Mon", value: 10 }],
+      width: 0,
+    }),
+  );
+  assert.throws(() =>
+    statsChartSpecSchema.parse({
+      kind: "statsChart",
+      chartType: "column",
+      data: [{ label: "Mon", value: 10 }],
+      height: 51,
+    }),
+  );
+});

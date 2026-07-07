@@ -913,3 +913,54 @@ test("stacked column showBorder: false suppresses each segment's outline stroke"
   });
   assert.match(typ, /cetz\.palette\.new\(base: \(stroke: none\), colors:/);
 });
+
+test("custom width/height override auto-computed size, independently per axis", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "column",
+    fontFamily: "sans",
+    showValues: false,
+    showGridLines: true,
+    showBorder: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ label: "A", value: 1 }],
+    width: 20,
+  });
+  // width overridden to 20; height keeps its auto-computed
+  // BASE_VALUE_AXIS_DIMENSION (8), since only width was set.
+  assert.match(typ, /size: \(20, 8\)/);
+});
+
+test("custom width and height together override both axes", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ x: 1, y: 1 }],
+    width: 30,
+    height: 15,
+  });
+  assert.match(typ, /size: \(30, 15\)/);
+});
+
+test("pie chart's custom width/height maps to radius = min(width, height) / 2", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    fontFamily: "sans",
+    data: [{ label: "A", value: 1 }],
+    showLegend: true,
+    showPercentage: "none",
+    width: 20,
+    height: 10,
+  });
+  assert.match(typ, /radius: 5/);
+});
