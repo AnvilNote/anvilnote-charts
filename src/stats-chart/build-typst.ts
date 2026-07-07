@@ -319,8 +319,16 @@ function colorArrayLiteral(data: CategoricalEntry[]): string {
   return `(${colors},)`;
 }
 
-function paletteLiteral(data: CategoricalEntry[]): string {
-  return `cetz.palette.new(colors: ${colorArrayLiteral(data)})`;
+// cetz's palette.new base style always includes a black 1pt stroke
+// unless overridden (confirmed by reading cetz's own lib/palette.typ:
+// `if not "stroke" in base { base.stroke = (paint: black, ...) }`) — so
+// showBorder: false needs an explicit `base: (stroke: none)` to actually
+// suppress each bar/column's outline; there's no "no stroke" default to
+// fall back to. Verified via a real compile that this correctly renders
+// borderless bars.
+function paletteLiteral(data: CategoricalEntry[], showBorder: boolean): string {
+  const base = showBorder ? "" : "base: (stroke: none), ";
+  return `cetz.palette.new(${base}colors: ${colorArrayLiteral(data)})`;
 }
 
 // cetz-plot's own tick-step default for bar/columnchart's value axis packs
@@ -394,8 +402,13 @@ function seriesColorArrayLiteral(seriesLabels: string[], seriesColors: string[] 
   return `(${colors},)`;
 }
 
-function seriesPaletteLiteral(seriesLabels: string[], seriesColors: string[] | undefined): string {
-  return `cetz.palette.new(colors: ${seriesColorArrayLiteral(seriesLabels, seriesColors)})`;
+function seriesPaletteLiteral(
+  seriesLabels: string[],
+  seriesColors: string[] | undefined,
+  showBorder: boolean,
+): string {
+  const base = showBorder ? "" : "base: (stroke: none), ";
+  return `cetz.palette.new(${base}colors: ${seriesColorArrayLiteral(seriesLabels, seriesColors)})`;
 }
 
 // `[#"literal string"]` markup-injection-safety wrapping, same reasoning
@@ -940,7 +953,7 @@ ${pointTuples},
     label-key: "label",
     mode: "stacked",
     size: ${size},
-    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}${legendLabelsArg}bar-style: ${seriesPaletteLiteral(spec.seriesLabels, spec.seriesColors)},
+    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}${legendLabelsArg}bar-style: ${seriesPaletteLiteral(spec.seriesLabels, spec.seriesColors, spec.showBorder)},
   )
 })
 `;
@@ -987,7 +1000,7 @@ ${pointTuples},
     value-key: "value",
     label-key: "label",
     size: ${size},
-    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data)},
+    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data, spec.showBorder)},
   )
 })
 `;
@@ -1042,7 +1055,7 @@ ${labelOffsetLet}
     ${axisLabelPlotArgs}x-ticks: (
 ${ticksLiteral},
     ),
-    plot-style: ${paletteLiteral(spec.data)},
+    plot-style: ${paletteLiteral(spec.data, spec.showBorder)},
     {
       plot.add-bar(
         (
@@ -1092,7 +1105,7 @@ ${labelOffsetLet}
     ${axisLabelPlotArgs}y-ticks: (
 ${barTicksLiteral},
     ),
-    plot-style: ${paletteLiteral(spec.data)},
+    plot-style: ${paletteLiteral(spec.data, spec.showBorder)},
     {
       plot.add-bar(
         (

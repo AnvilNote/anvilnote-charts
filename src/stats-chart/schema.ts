@@ -100,16 +100,23 @@ const axisLabelFields = {
 // per explicit feedback; not added to line (not requested, and a line
 // chart's own data-connecting strokes already give it a different visual
 // density than bar/column's discrete bars).
+//
+// showBorder: toggles each bar/column's own outline (cetz.palette.new's
+// base style always includes a black 1pt stroke unless overridden — see
+// build-typst.ts's paletteLiteral comment) — per explicit feedback,
+// bar/column/stacked only (not pie/line, not requested for those).
 const barChartSchema = categoricalBase.extend({
   chartType: z.literal("bar"),
   showValues: z.boolean().default(false),
   showGridLines: z.boolean().default(true),
+  showBorder: z.boolean().default(true),
   ...axisLabelFields,
 });
 const columnChartSchema = categoricalBase.extend({
   chartType: z.literal("column"),
   showValues: z.boolean().default(false),
   showGridLines: z.boolean().default(true),
+  showBorder: z.boolean().default(true),
   ...axisLabelFields,
 });
 // Point-connected line over the same categorical (label, value) data shape
@@ -193,6 +200,7 @@ const stackedChartBase = z.object({
     .optional(),
   showLegend: z.boolean().default(true),
   showGridLines: z.boolean().default(true),
+  showBorder: z.boolean().default(true),
   fontFamily: fontFamilySchema,
   ...axisLabelFields,
 });

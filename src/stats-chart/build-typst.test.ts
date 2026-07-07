@@ -10,6 +10,7 @@ test("generates imports pinned to the bundled cetz/cetz-plot versions", () => {
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -26,6 +27,7 @@ test("bar chart uses chart.barchart with a palette built from resolved colors", 
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -46,6 +48,7 @@ test("column chart uses chart.columnchart", () => {
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -61,6 +64,7 @@ test("stacked column chart passes multiple value keys and series legend labels",
     chartType: "stackedColumn",
     showLegend: true,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -86,6 +90,7 @@ test("stacked bar chart computes value-axis max from row totals", () => {
     chartType: "stackedBar",
     showLegend: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -162,8 +167,8 @@ test("boxwhisker always fixes the value axis floor at 0, regardless of the data'
 
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, showGridLines: true, xLabel: "", yLabel: "", yLabelRotated: true, data: manyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, showGridLines: true, xLabel: "", yLabel: "", yLabelRotated: true, data: manyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, showGridLines: true, showBorder: true, xLabel: "", yLabel: "", yLabelRotated: true, data: manyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, showGridLines: true, showBorder: true, xLabel: "", yLabel: "", yLabelRotated: true, data: manyEntries });
   assert.match(bar, /size: \(8, 12\)/);
   assert.match(column, /size: \(12, 8\)/);
 });
@@ -174,8 +179,8 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
   // overflowing. The clamp keeps the chart's overall size bounded; bars
   // just get proportionally narrower instead.
   const twentyEntries = Array.from({ length: 20 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, showGridLines: true, xLabel: "", yLabel: "", yLabelRotated: true, data: twentyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, showGridLines: true, xLabel: "", yLabel: "", yLabelRotated: true, data: twentyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, showGridLines: true, showBorder: true, xLabel: "", yLabel: "", yLabelRotated: true, data: twentyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, showGridLines: true, showBorder: true, xLabel: "", yLabel: "", yLabelRotated: true, data: twentyEntries });
   const boxwhiskerData = Array.from({ length: 20 }, (_, i) => ({
     label: `L${i}`,
     min: 0,
@@ -197,6 +202,7 @@ test("bar chart computes a nice x-tick-step from the max value, avoiding crowded
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -215,6 +221,7 @@ test("column chart computes a nice y-tick-step from the max value", () => {
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -230,6 +237,7 @@ test("nice tick step rounds to 1/2/5/10 x a power of ten, not an arbitrary fract
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -248,6 +256,7 @@ test("bar chart rounds axis max up to the next tick-step multiple past the data 
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -267,6 +276,7 @@ test("column chart rounds axis max up using y-max", () => {
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -283,6 +293,7 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -298,6 +309,7 @@ test("column chart rotates labels via an explicit x-ticks override when a label 
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -318,6 +330,7 @@ test("column chart does not add an x-ticks override when all labels are short", 
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -336,6 +349,7 @@ test("bar chart never rotates labels, even with long labels (category axis is ve
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -358,6 +372,7 @@ test("rotation never uses the ambient axes style (would also rotate the value ax
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -392,6 +407,7 @@ test("rotated tick content escapes markup-sensitive characters as a safe string,
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -407,6 +423,7 @@ test("escapes double quotes in labels", () => {
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -422,6 +439,7 @@ test("escapes newlines/tabs/carriage-returns in labels", () => {
     chartType: "bar",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -452,6 +470,7 @@ test("single-entry bar/column palette produces a valid 1-element array (trailing
       data,
       showValues: false,
       showGridLines: true,
+      showBorder: true,
       xLabel: "",
       yLabel: "",
       yLabelRotated: true,
@@ -487,6 +506,7 @@ test("column/bar showValues bypasses chart.columnchart/barchart and annotates ea
     chartType: "column",
     showValues: true,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -507,6 +527,7 @@ test("column/bar showValues bypasses chart.columnchart/barchart and annotates ea
     chartType: "bar",
     showValues: true,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -525,6 +546,7 @@ test("column/bar without showValues still uses the normal chart.columnchart/barc
     chartType: "column",
     showValues: false,
     showGridLines: true,
+    showBorder: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -832,4 +854,37 @@ test("scatter chart's showGridLines toggles both axes' gridlines together", () =
   });
   assert.match(typ, /x-grid: false/);
   assert.match(typ, /y-grid: false/);
+});
+
+test("bar/column showBorder: false suppresses each bar's outline stroke", () => {
+  const bar = buildStatsChartTypst({
+    kind: "statsChart",
+    fontFamily: "sans",
+    chartType: "bar",
+    showValues: false,
+    showGridLines: true,
+    showBorder: false,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ label: "A", value: 10 }],
+  });
+  assert.match(bar, /cetz\.palette\.new\(base: \(stroke: none\), colors:/);
+});
+
+test("stacked column showBorder: false suppresses each segment's outline stroke", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    fontFamily: "sans",
+    chartType: "stackedColumn",
+    showLegend: true,
+    showGridLines: true,
+    showBorder: false,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    seriesLabels: ["A", "B"],
+    data: [{ label: "Q1", values: [10, 20] }],
+  });
+  assert.match(typ, /cetz\.palette\.new\(base: \(stroke: none\), colors:/);
 });
