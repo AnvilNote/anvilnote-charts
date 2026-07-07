@@ -625,6 +625,7 @@ test("scatter chart plots raw (x, y) points with no connecting line", () => {
     fontFamily: "sans",
     trendLine: "none",
     trendLineColor: "#737373",
+    showGridLines: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -647,6 +648,7 @@ test("scatter chart's linear trend line uses the user-chosen trendLineColor, not
     fontFamily: "sans",
     trendLine: "linear",
     trendLineColor: "#ff0000",
+    showGridLines: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -667,6 +669,7 @@ test("scatter chart's lowess trend line also uses the user-chosen trendLineColor
     fontFamily: "sans",
     trendLine: "lowess",
     trendLineColor: "#00ff00",
+    showGridLines: true,
     xLabel: "",
     yLabel: "",
     yLabelRotated: true,
@@ -674,4 +677,64 @@ test("scatter chart's lowess trend line also uses the user-chosen trendLineColor
   });
   assert.match(typ, /stroke: rgb\("#00ff00"\) \+ 2pt/);
   assert.match(typ, /line: "spline"/);
+});
+
+test("scatter chart's value axes always floor at 0, regardless of the data's own min", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [
+      { x: 40, y: 400 },
+      { x: 60, y: 600 },
+    ],
+  });
+  assert.match(typ, /x-min: 0/);
+  assert.match(typ, /y-min: 0/);
+});
+
+test("scatter chart's tick step only ever chooses a 5-or-10-per-decade step, never 1/2", () => {
+  // Data max of 13 would round to step 2 under the general niceTickStep
+  // (used by bar/column) — scatter must use its own narrower step
+  // chooser instead, landing on 5 here (13/5 = 2.6 rough step, rounds up
+  // to the 5-per-decade candidate, not niceTickStep's "2").
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ x: 13, y: 13 }],
+  });
+  assert.match(typ, /x-tick-step: 5\b/);
+  assert.match(typ, /y-tick-step: 5\b/);
+  // max rounds up to the next step-5 multiple past 13: 15.
+  assert.match(typ, /x-max: 15\b/);
+});
+
+test("scatter chart's showGridLines toggles both axes' gridlines together", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: false,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ x: 1, y: 1 }],
+  });
+  assert.match(typ, /x-grid: false/);
+  assert.match(typ, /y-grid: false/);
 });

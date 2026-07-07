@@ -137,6 +137,9 @@ const scatterChartSchema = z.object({
   fontFamily: fontFamilySchema,
   trendLine: z.enum(TREND_LINE_KINDS).default("none"),
   trendLineColor: z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value").default("#737373"),
+  // Value axis reference gridlines — same concept as bar/column's own
+  // showGridLines, defaulted true (existing behavior unchanged).
+  showGridLines: z.boolean().default(true),
   ...axisLabelFields,
 });
 // Where (if at all) each slice's share of the total is displayed:

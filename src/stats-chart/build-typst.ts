@@ -356,6 +356,31 @@ function categoricalAxisMax(data: CategoricalEntry[]): number {
   return Math.ceil(maxValue / step) * step;
 }
 
+// Scatter's own tick step, restricted to a "5" or "10" per decade —
+// per explicit feedback, NOT the general 1/2/5/10 rounding
+// niceTickStep uses elsewhere. Same "aim for ~5 ticks, round to the
+// magnitude's own decade" approach, just with a narrower candidate set.
+function scatterAxisTickStep(maxAbsValue: number): number {
+  if (maxAbsValue <= 0) return 5;
+  const roughStep = maxAbsValue / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const niceNormalized = normalized <= 5 ? 5 : 10;
+  return niceNormalized * magnitude;
+}
+
+// Scatter's value axis always floors at 0 (per explicit feedback,
+// matching bar/column/boxwhisker's own forced floor) and rounds its own
+// max UP to the next 5-or-10 tick-step multiple past the data's actual
+// max — same "full final gridline at a round number" reasoning as
+// categoricalAxisMax above, computed independently per axis (x and y
+// scales can differ).
+function scatterAxisConfig(values: number[]): { max: number; step: number } {
+  const maxValue = Math.max(...values);
+  const step = scatterAxisTickStep(Math.abs(maxValue));
+  return { max: Math.ceil(maxValue / step) * step, step };
+}
+
 // Scales the chart's entry-count axis with the number of entries (so a
 // 2-bar chart isn't rendered at the same size as a 15-bar chart), but
 // clamped at MAX_SCALED_DIMENSION — without a ceiling, a chart with many
@@ -735,6 +760,8 @@ ${pointTuples},
     // margin), not a fixed category-count-based size.
     const pointTuples = spec.data.map((entry) => `      (${entry.x}, ${entry.y})`).join(",\n");
     const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
+    const xAxis = scatterAxisConfig(spec.data.map((p) => p.x));
+    const yAxis = scatterAxisConfig(spec.data.map((p) => p.y));
 
     // "linear": one straight line spanning the data's own x-range (2
     // points is enough for cetz-plot's own "linear" line-mode to draw a
@@ -775,8 +802,14 @@ ${smoothedTuples},
   plot.plot(
     size: (12, 8),
     axis-style: "scientific-auto",
-    x-grid: true,
-    y-grid: true,
+    x-grid: ${spec.showGridLines},
+    y-grid: ${spec.showGridLines},
+    x-min: 0,
+    x-max: ${xAxis.max},
+    x-tick-step: ${xAxis.step},
+    y-min: 0,
+    y-max: ${yAxis.max},
+    y-tick-step: ${yAxis.step},
     x-format: ${MATH_TICK_FORMAT},
     y-format: ${MATH_TICK_FORMAT},
     ${axisLabelPlotArgs}{
