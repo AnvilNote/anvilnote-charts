@@ -19,7 +19,14 @@ const categoricalEntrySchema = z.object({
 // no meaningful "category" axis. MAX_ENTRIES is deliberately larger than
 // categorical's own 20-entry cap (scatter data is commonly a larger
 // sample; a trend line needs enough points to be meaningful).
-const SCATTER_MAX_ENTRIES = 200;
+//
+// 5000 is an empirically measured ceiling, not a guess — a real compile
+// via anvilnote-charts's own compileTypstToSvg (Typst 0.14.2, cetz
+// 0.4.0/cetz-plot 0.1.2, this machine) took ~7.6s at 5000 points; 10000
+// points exceeded the compiler's own 8s COMPILE_TIMEOUT_MS (see
+// compile.ts). Keeping the cap at the last measured-good point rather
+// than the failure point, since real user machines/fonts will vary.
+const SCATTER_MAX_ENTRIES = 5000;
 const scatterEntrySchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
