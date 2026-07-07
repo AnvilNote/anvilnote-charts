@@ -54,6 +54,53 @@ test("column chart uses chart.columnchart", () => {
   assert.match(typ, /chart\.columnchart\(/);
 });
 
+test("stacked column chart passes multiple value keys and series legend labels", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    fontFamily: "sans",
+    chartType: "stackedColumn",
+    showLegend: true,
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    seriesLabels: ["Product A", "Product B"],
+    seriesColors: ["#111111", "#222222"],
+    data: [
+      { label: "Q1", values: [10, 20] },
+      { label: "Q2", values: [15, 25] },
+    ],
+  });
+  assert.match(typ, /chart\.columnchart\(/);
+  assert.match(typ, /mode: "stacked"/);
+  assert.match(typ, /value-key: \("v0", "v1"\)/);
+  assert.match(typ, /label: "Q1", v0: 10, v1: 20/);
+  assert.match(typ, /labels: \(\[#"Product A"\], \[#"Product B"\]\)/);
+  assert.match(typ, /cetz\.palette\.new\(colors: \(rgb\("#111111"\), rgb\("#222222"\),\)\)/);
+});
+
+test("stacked bar chart computes value-axis max from row totals", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    fontFamily: "sans",
+    chartType: "stackedBar",
+    showLegend: false,
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    seriesLabels: ["A", "B"],
+    data: [
+      { label: "Q1", values: [40, 52] },
+      { label: "Q2", values: [10, 20] },
+    ],
+  });
+  assert.match(typ, /chart\.barchart\(/);
+  assert.match(typ, /x-tick-step: 20/);
+  assert.match(typ, /x-max: 100/);
+  assert.doesNotMatch(typ, /labels:/);
+});
+
 test("pie chart uses a bare color array for slice-style and shows legend by default", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",

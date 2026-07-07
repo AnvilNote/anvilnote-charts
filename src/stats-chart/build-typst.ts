@@ -904,6 +904,41 @@ ${pointTuples},
 `;
   }
 
+  if (spec.chartType === "stackedBar" || spec.chartType === "stackedColumn") {
+    const dataLiteral = stackedDataLiteral(spec.data);
+    const entryAxisDimension = scaledDimension(spec.data.length);
+    const size =
+      spec.chartType === "stackedBar"
+        ? `(${BASE_VALUE_AXIS_DIMENSION}, ${entryAxisDimension})`
+        : `(${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION})`;
+    const chartFn = spec.chartType === "stackedBar" ? "barchart" : "columnchart";
+    const valueKeys = stackedValueKeysLiteral(spec.seriesLabels.length);
+    const valueAxisArgs =
+      spec.chartType === "stackedBar"
+        ? `x-tick-step: ${stackedTickStep(spec.data)},\n    x-max: ${stackedAxisMax(spec.data)},\n    x-format: ${MATH_TICK_FORMAT},\n    x-grid: ${spec.showGridLines},\n    `
+        : `y-tick-step: ${stackedTickStep(spec.data)},\n    y-max: ${stackedAxisMax(spec.data)},\n    y-format: ${MATH_TICK_FORMAT},\n    y-grid: ${spec.showGridLines},\n    `;
+    const rotateTicksArg =
+      spec.chartType === "stackedColumn" && hasLongLabels(spec.data)
+        ? rotatedXTicksLiteral(spec.data, 0)
+        : "";
+    const legendLabelsArg = spec.showLegend ? `labels: ${seriesLabelsLiteral(spec.seriesLabels)},\n    ` : "";
+    const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
+
+    return `${header}
+#cetz.canvas({
+  ${axisTickLabelClearance(leftAngleOverride)}
+  chart.${chartFn}(
+    ${dataLiteral},
+    value-key: ${valueKeys},
+    label-key: "label",
+    mode: "stacked",
+    size: ${size},
+    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}${legendLabelsArg}bar-style: ${seriesPaletteLiteral(spec.seriesLabels, spec.seriesColors)},
+  )
+})
+`;
+  }
+
   // bar (horizontal) and column (vertical) share the exact same call shape
   // in cetz-plot — only the function name and axis orientation differ
   // (confirmed by reading both barchart.typ and columnchart.typ: identical

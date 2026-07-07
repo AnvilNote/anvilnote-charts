@@ -94,6 +94,34 @@ test("rejects boxwhisker entry with out-of-order values", () => {
   );
 });
 
+test("accepts a valid stacked column spec", () => {
+  const result = statsChartSpecSchema.parse({
+    kind: "statsChart",
+    chartType: "stackedColumn",
+    data: [
+      { label: "Q1", values: [10, 20] },
+      { label: "Q2", values: [15, 25] },
+    ],
+    seriesLabels: ["Product A", "Product B"],
+  });
+  assert.equal(result.chartType, "stackedColumn");
+  if (result.chartType === "stackedColumn") {
+    assert.equal(result.showLegend, true);
+    assert.equal(result.showGridLines, true);
+  }
+});
+
+test("rejects stacked entries whose value count does not match series labels", () => {
+  assert.throws(() =>
+    statsChartSpecSchema.parse({
+      kind: "statsChart",
+      chartType: "stackedBar",
+      data: [{ label: "Q1", values: [10] }],
+      seriesLabels: ["Product A", "Product B"],
+    }),
+  );
+});
+
 test("rejects more than 20 entries", () => {
   const entry = { label: "x", value: 1 };
   assert.throws(() =>
