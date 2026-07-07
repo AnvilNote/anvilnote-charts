@@ -40,12 +40,27 @@ const categoricalBase = z.object({
   data: z.array(categoricalEntrySchema).min(1).max(MAX_ENTRIES),
 });
 
-const barChartSchema = categoricalBase.extend({ chartType: z.literal("bar") });
-const columnChartSchema = categoricalBase.extend({ chartType: z.literal("column") });
+// showValues: prints each bar/column's own value above/beside it (rounded
+// to at most 2 decimal places — see build-typst.ts's formatValueLabel).
+// Defaulted false (not required): added after the initial spec shape
+// shipped, so older saved specs missing this field still validate.
+const barChartSchema = categoricalBase.extend({
+  chartType: z.literal("bar"),
+  showValues: z.boolean().default(false),
+});
+const columnChartSchema = categoricalBase.extend({
+  chartType: z.literal("column"),
+  showValues: z.boolean().default(false),
+});
 const pyramidChartSchema = categoricalBase.extend({ chartType: z.literal("pyramid") });
 const pieChartSchema = categoricalBase.extend({
   chartType: z.literal("pie"),
   showLegend: z.boolean().default(true),
+  // Appends each slice's share of the total (e.g. "Label (12.34%)") to its
+  // displayed label — computed from the data itself, not user-entered, and
+  // always sums to exactly 100.00% via largest-remainder rounding (see
+  // build-typst.ts's percentageLabels).
+  showPercentage: z.boolean().default(false),
 });
 
 const boxWhiskerChartSchema = z.object({

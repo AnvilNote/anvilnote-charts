@@ -39,6 +39,62 @@ function categoricalDataLiteral(data: CategoricalEntry[]): string {
   return `(\n${rows},\n)`;
 }
 
+// Rounds to at most 2 decimal places, trimming trailing zeros (42 -> "42",
+// 42.5 -> "42.5", 42.567 -> "42.57") — JS's own Number-to-string conversion
+// already drops trailing zeros once the value itself is rounded, so no
+// separate trim step is needed beyond the rounding.
+function formatValueLabel(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+// Largest-remainder rounding: computes each entry's share of the total as a
+// percentage string with exactly 2 decimals, guaranteed to sum to exactly
+// "100.00" — naively rounding each entry's raw percentage independently
+// (e.g. 33.333...% three ways) can sum to 99.99 or 100.01 depending on
+// which way each one happens to round. Working in hundredths-of-a-percent
+// integers (so the target sum is the exact integer 10000, not a float)
+// avoids floating-point drift entirely: floor every entry first, then
+// distribute the leftover 1-unit remainders to the entries with the
+// largest fractional part, largest first — the standard "largest
+// remainder" apportionment method.
+function percentageStrings(data: CategoricalEntry[]): string[] {
+  const total = data.reduce((sum, entry) => sum + entry.value, 0);
+  if (total === 0) return data.map(() => "0.00");
+
+  const scaled = data.map((entry) => (entry.value / total) * 10000);
+  const floors = scaled.map(Math.floor);
+  const distributed = floors.reduce((sum, value) => sum + value, 0);
+  let remainder = 10000 - distributed;
+
+  const byRemainingFraction = scaled
+    .map((value, index) => ({ index, fraction: value - floors[index] }))
+    .sort((a, b) => b.fraction - a.fraction);
+
+  const result = [...floors];
+  for (const { index } of byRemainingFraction) {
+    if (remainder <= 0) break;
+    result[index] += 1;
+    remainder -= 1;
+  }
+  return result.map((hundredthsPercent) => (hundredthsPercent / 100).toFixed(2));
+}
+
+// Same shape as categoricalDataLiteral, but each label has its entry's
+// percentage-of-total appended — used only when showPercentage is on.
+// Percentages are computed from the data itself (not user-entered), so
+// this always reflects the actual proportions and always sums to exactly
+// 100.00% (see percentageStrings above).
+function categoricalDataLiteralWithPercentage(data: CategoricalEntry[]): string {
+  const percentages = percentageStrings(data);
+  const rows = data
+    .map(
+      (entry, index) =>
+        `  (label: "${escapeTypstString(`${entry.label} (${percentages[index]}%)`)}", value: ${entry.value})`,
+    )
+    .join(",\n");
+  return `(\n${rows},\n)`;
+}
+
 // bar/column validate their `bar-style` argument as a "plot-style" — a
 // palette FUNCTION (as returned by cetz's own `palette.new(colors: (...))`),
 // not a bare array of colors. Confirmed by a real compile: passing a raw
@@ -192,9 +248,68 @@ function rotatedXTicksLiteral(entries: { label: string }[], startIndex: number):
   return `x-ticks: (\n${ticks},\n    ),\n    `;
 }
 
+// Same markup-injection-safety reasoning as rotatedXTicksLiteral above
+// (`[#"..."]`, not raw markup splicing), but WITHOUT the rotate() wrapper —
+// used by the custom showValues bar/column path (see buildStatsChartTypst
+// below), which bypasses chart.barchart/columnchart's own internal tick-
+// list generation entirely and so must always supply its own x-ticks/
+// y-ticks, rotated or not, not just in the "long labels" case.
+function plainTicksLiteral(entries: { label: string }[], startIndex: number): string {
+  return entries
+    .map((entry, index) => `      (${startIndex + index}, [#"${escapeTypstString(entry.label)}"])`)
+    .join(",\n");
+}
+
+// Fraction of the value axis's own max used as clearance between a bar's
+// value label and the bar's own top/end edge — a fixed pixel/point offset
+// would look right at one axis scale and cramped/floating at another,
+// since the chart's own size is independent of the axis's numeric range.
+// Verified via a real compile: without any offset, a label's anchor point
+// sits exactly at the bar's top edge, overlapping it (illegible against a
+// dark fill); this fraction gives clear, consistent visual separation
+// across small and large axis ranges alike.
+const VALUE_LABEL_OFFSET_FRACTION = 0.03;
+
+// content(...) calls for chart.columnchart's plot.annotate block — one
+// per bar, anchored "south" (bottom-center of the label sits at the
+// point, so the label grows upward, clearing the bar's top edge by
+// _label-offset). Same markup-injection-safety reasoning as
+// plainTicksLiteral above.
+function columnValueAnnotationsLiteral(data: CategoricalEntry[]): string {
+  return data
+    .map(
+      (entry, index) =>
+        `      content((${index}, ${entry.value} + _label-offset), anchor: "south", [#"${escapeTypstString(formatValueLabel(entry.value))}"])`,
+    )
+    .join("\n");
+}
+
+// Same as columnValueAnnotationsLiteral, for chart.barchart's horizontal
+// orientation instead: anchored "west" (left edge of the label sits at
+// the point, so the label grows rightward past the bar's end), and
+// positions mirror barchart's own reversed convention (entry 0 renders
+// topmost, at position data.len()-1 — see buildStatsChartTypst's bar
+// branch for the matching data-tuple construction).
+function barValueAnnotationsLiteral(data: CategoricalEntry[]): string {
+  const n = data.length;
+  return data
+    .map(
+      (entry, index) =>
+        `      content((${entry.value} + _label-offset, ${n - index - 1}), anchor: "west", [#"${escapeTypstString(formatValueLabel(entry.value))}"])`,
+    )
+    .join("\n");
+}
+
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
+  // `plot` (not just `chart`) is only needed by the custom showValues
+  // bar/column path below, which calls plot.plot/plot.add-bar/
+  // plot.annotate directly instead of going through chart.barchart/
+  // columnchart — importing it unconditionally would be a harmless but
+  // needless unused-import for every other chart type.
+  const needsPlotImport =
+    (spec.chartType === "bar" || spec.chartType === "column") && spec.showValues;
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
-#import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart
+#import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart${needsPlotImport ? ", plot" : ""}
 #set page(width: auto, height: auto, margin: 8pt)`;
 
   if (spec.chartType === "boxwhisker") {
@@ -244,10 +359,19 @@ ${boxes},
     // label) — confirmed by a real compile; there's no separate boolean
     // "show legend" flag in its own API.
     const legendArg = spec.showLegend ? "" : ",\n    legend: (label: none)";
+    // Percentage is baked directly into each slice's own label text
+    // (computed from the data itself, not a separate chart-library
+    // feature) rather than a piechart param — piechart has no built-in
+    // "show percentage" option, but its label IS just whatever string
+    // label-key resolves to, so appending "(XX.XX%)" there is sufficient
+    // and needs no other change to the call itself.
+    const pieDataLiteral = spec.showPercentage
+      ? categoricalDataLiteralWithPercentage(spec.data)
+      : dataLiteral;
     return `${header}
 #cetz.canvas({
   chart.piechart(
-    ${dataLiteral},
+    ${pieDataLiteral},
     value-key: "value",
     label-key: "label",
     radius: 3,
@@ -299,7 +423,9 @@ ${boxes},
   // this). columnchart's own internal x-tick positions are 0-based.
   const rotateTicksArg =
     spec.chartType === "column" && hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 0) : "";
-  return `${header}
+
+  if (!spec.showValues) {
+    return `${header}
 #cetz.canvas({
   chart.${chartFn}(
     ${dataLiteral},
@@ -307,6 +433,122 @@ ${boxes},
     label-key: "label",
     size: ${size},
     ${valueAxisArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data)},
+  )
+})
+`;
+  }
+
+  // showValues bypasses chart.barchart/columnchart entirely, calling
+  // plot.plot/plot.add-bar/plot.annotate directly — cetz-plot's own
+  // bar/columnchart wrappers have no per-bar value-label feature (grep
+  // across chart/*.typ turned up nothing), and their `..plot-args` only
+  // forwards NAMED arguments to the internal plot.plot call, not extra
+  // BODY content, so a value-label overlay can't be injected into their
+  // existing call from the outside. plot.add-bar is the exact same
+  // primitive chart.barchart/columnchart use internally (confirmed by
+  // reading both files' source) — this replicates their setup (x/y-min/
+  // max, tick lists, bar-width, axes orientation) rather than reimplementing
+  // bar POSITIONING itself, which stays inside that shared, already-tested
+  // primitive. Verified via real compiles for both orientations that this
+  // produces the same visual bar layout as the wrapped call, plus correctly
+  // positioned value labels.
+  const n = spec.data.length;
+  const axisMax = categoricalAxisMax(spec.data);
+  const labelOffsetLet = `#let _label-offset = ${axisMax} * ${VALUE_LABEL_OFFSET_FRACTION}`;
+
+  if (spec.chartType === "column") {
+    const ticksLiteral = hasLongLabels(spec.data)
+      ? spec.data
+          .map(
+            (entry, index) =>
+              `      (${index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+          )
+          .join(",\n")
+      : plainTicksLiteral(spec.data, 0);
+    const dataTuples = spec.data
+      .map((entry, index) => `      (${index}, (${entry.value},), ())`)
+      .join(",\n");
+    return `${header}
+${labelOffsetLet}
+#cetz.canvas({
+  import cetz.draw: content
+  let _x-inset = calc.max(1, 0.8 / 2)
+  plot.plot(
+    size: ${size},
+    axis-style: "scientific-auto",
+    y-grid: true,
+    y-tick-step: ${categoricalTickStep(spec.data)},
+    y-max: ${axisMax},
+    x-min: -_x-inset,
+    x-max: ${n} + _x-inset - 1,
+    x-tick-step: none,
+    x-ticks: (
+${ticksLiteral},
+    ),
+    plot-style: ${paletteLiteral(spec.data)},
+    {
+      plot.add-bar(
+        (
+${dataTuples},
+        ),
+        x-key: 0,
+        y-key: 1,
+        mode: "basic",
+        bar-width: 0.8,
+        axes: ("x", "y"),
+      )
+      plot.annotate({
+${columnValueAnnotationsLiteral(spec.data)}
+      })
+    }
+  )
+})
+`;
+  }
+
+  // bar (horizontal): entries render topmost-first, at position
+  // data.len()-1 down to 0 — matching chart.barchart's own reversed
+  // convention (see barValueAnnotationsLiteral's comment) — and bar-width
+  // is negative, also matching barchart.typ's own call exactly.
+  const barTicksLiteral = spec.data
+    .map((entry, index) => `      (${n - index - 1}, [#"${escapeTypstString(entry.label)}"])`)
+    .join(",\n");
+  const barDataTuples = spec.data
+    .map((entry, index) => `      (${n - index - 1}, (${entry.value},), ())`)
+    .join(",\n");
+  return `${header}
+${labelOffsetLet}
+#cetz.canvas({
+  import cetz.draw: content
+  let _y-inset = calc.max(1, 0.8 / 2)
+  plot.plot(
+    size: ${size},
+    axis-style: "scientific-auto",
+    x-grid: true,
+    x-tick-step: ${categoricalTickStep(spec.data)},
+    x-max: ${axisMax},
+    y-min: -_y-inset,
+    y-max: ${n} + _y-inset - 1,
+    y-tick-step: none,
+    y-ticks: (
+${barTicksLiteral},
+    ),
+    plot-style: ${paletteLiteral(spec.data)},
+    {
+      plot.add-bar(
+        (
+${barDataTuples},
+        ),
+        x-key: 0,
+        y-key: 1,
+        mode: "basic",
+        bar-width: -0.8,
+        axes: ("y", "x"),
+      )
+      plot.annotate({
+${barValueAnnotationsLiteral(spec.data)}
+      })
+    }
   )
 })
 `;

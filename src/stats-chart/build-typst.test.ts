@@ -1,11 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildStatsChartTypst, CETZ_VERSION, CETZ_PLOT_VERSION } from "./build-typst.js";
+import type { StatsChartSpec } from "./schema.js";
 
 test("generates imports pinned to the bundled cetz/cetz-plot versions", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: "Mon", value: 10 }],
   });
   assert.match(typ, new RegExp(`#import "@preview/cetz:${CETZ_VERSION}"`));
@@ -16,6 +18,7 @@ test("bar chart uses chart.barchart with a palette built from resolved colors", 
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [
       { label: "Mon", value: 10, color: "#111111" },
       { label: "Tue", value: 5 },
@@ -30,6 +33,7 @@ test("column chart uses chart.columnchart", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [{ label: "Mon", value: 10 }],
   });
   assert.match(typ, /chart\.columnchart\(/);
@@ -43,10 +47,11 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
       { label: "Male", value: 10 },
       { label: "Female", value: 20 },
     ],
-    // Zod's .default(true) only applies during .parse() — this test calls
-    // buildStatsChartTypst directly with a hand-built object, so the field
-    // must be set explicitly here to exercise the "shown" branch.
+    // Zod's .default(true)/.default(false) only applies during .parse() —
+    // this test calls buildStatsChartTypst directly with a hand-built
+    // object, so both fields must be set explicitly here.
     showLegend: true,
+    showPercentage: false,
   });
   assert.match(typ, /chart\.piechart\(/);
   assert.match(typ, /slice-style: \(rgb\("#000000"\), rgb\("#404040"\),\)/);
@@ -59,6 +64,7 @@ test("pie chart suppresses the legend when showLegend is false", () => {
     chartType: "pie",
     data: [{ label: "Male", value: 10 }],
     showLegend: false,
+    showPercentage: false,
   });
   assert.match(typ, /legend: \(label: none\)/);
 });
@@ -100,8 +106,8 @@ test("boxwhisker always fixes the value axis floor at 0, regardless of the data'
 
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: manyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", data: manyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: false, data: manyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data: manyEntries });
   assert.match(bar, /size: \(8, 12\)/);
   assert.match(column, /size: \(12, 8\)/);
 });
@@ -112,8 +118,8 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
   // overflowing. The clamp keeps the chart's overall size bounded; bars
   // just get proportionally narrower instead.
   const twentyEntries = Array.from({ length: 20 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: twentyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", data: twentyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: false, data: twentyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data: twentyEntries });
   const boxwhiskerData = Array.from({ length: 20 }, (_, i) => ({
     label: `L${i}`,
     min: 0,
@@ -132,6 +138,7 @@ test("bar chart computes a nice x-tick-step from the max value, avoiding crowded
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [
       { label: "Test", value: 100 },
       { label: "Hi", value: 12 },
@@ -144,6 +151,7 @@ test("column chart computes a nice y-tick-step from the max value", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [{ label: "Test", value: 100 }],
   });
   assert.match(typ, /y-tick-step: 20/);
@@ -153,6 +161,7 @@ test("nice tick step rounds to 1/2/5/10 x a power of ten, not an arbitrary fract
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: "A", value: 13 }],
   });
   assert.match(typ, /x-tick-step: 2\b/);
@@ -165,6 +174,7 @@ test("bar chart rounds axis max up to the next tick-step multiple past the data 
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [
       { label: "Mon", value: 42 },
       { label: "Wed", value: 92 },
@@ -178,6 +188,7 @@ test("column chart rounds axis max up using y-max", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [{ label: "A", value: 92 }],
   });
   assert.match(typ, /y-tick-step: 20/);
@@ -188,6 +199,7 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: "A", value: 100 }],
   });
   assert.match(typ, /x-max: 100/);
@@ -197,6 +209,7 @@ test("column chart rotates labels via an explicit x-ticks override when a label 
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [
       { label: "Week2-Monday", value: 10 },
       { label: "Week2-Tuesday", value: 20 },
@@ -211,6 +224,7 @@ test("column chart does not add an x-ticks override when all labels are short", 
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [
       { label: "Mon", value: 10 },
       { label: "Tue", value: 20 },
@@ -223,6 +237,7 @@ test("bar chart never rotates labels, even with long labels (category axis is ve
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: "Week2-Monday", value: 10 }],
   });
   assert.doesNotMatch(typ, /x-ticks:/);
@@ -239,6 +254,7 @@ test("rotation never uses the ambient axes style (would also rotate the value ax
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [{ label: "Week2-Wednesday", value: 10 }],
   });
   assert.doesNotMatch(typ, /draw\.set-style/);
@@ -266,6 +282,7 @@ test("rotated tick content escapes markup-sensitive characters as a safe string,
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "column",
+    showValues: false,
     data: [{ label: '#dangerous "quote" *and* stuff-long', value: 10 }],
   });
   assert.match(typ, /rotate\(45deg, reflow: true\)\[#"#dangerous \\"quote\\" \*and\* stuff-long"\]/);
@@ -275,6 +292,7 @@ test("escapes double quotes in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: 'Say "hi"', value: 1 }],
   });
   assert.match(typ, /label: "Say \\"hi\\""/);
@@ -284,6 +302,7 @@ test("escapes newlines/tabs/carriage-returns in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "bar",
+    showValues: false,
     data: [{ label: "line1\nline2\ttabbed\r", value: 1 }],
   });
   assert.match(typ, /label: "line1\\nline2\\ttabbed\\r"/);
@@ -304,7 +323,12 @@ test("escapes newlines/tabs/carriage-returns in labels", () => {
 test("single-entry bar/column/pyramid palette produces a valid 1-element array (trailing comma)", () => {
   const data = [{ label: "Solo", value: 1 }];
   for (const chartType of ["bar", "column", "pyramid"] as const) {
-    const typ = buildStatsChartTypst({ kind: "statsChart", chartType, data });
+    const typ = buildStatsChartTypst({
+      kind: "statsChart",
+      chartType,
+      data,
+      ...(chartType === "pyramid" ? {} : { showValues: false }),
+    } as StatsChartSpec);
     assert.match(
       typ,
       /colors: \(rgb\("#000000"\),\)/,
@@ -319,6 +343,65 @@ test("single-entry pie slice-style produces a valid 1-element array (trailing co
     chartType: "pie",
     data: [{ label: "Solo", value: 1 }],
     showLegend: true,
+    showPercentage: false,
   });
   assert.match(typ, /slice-style: \(rgb\("#000000"\),\)/);
+});
+
+test("column/bar showValues bypasses chart.columnchart/barchart and annotates each bar with its value", () => {
+  const data = [
+    { label: "Mon", value: 42 },
+    { label: "Tue", value: 78.456 },
+  ];
+  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: true, data });
+  assert.doesNotMatch(column, /chart\.columnchart\(/);
+  assert.match(column, /plot\.add-bar\(/);
+  assert.match(column, /plot\.annotate\(/);
+  // 78.456 rounds to at most 2 decimals: 78.46, not the raw value.
+  assert.match(column, /\[#"78\.46"\]/);
+  assert.match(column, /\[#"42"\]/);
+
+  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: true, data });
+  assert.doesNotMatch(bar, /chart\.barchart\(/);
+  assert.match(bar, /plot\.add-bar\(/);
+  assert.match(bar, /bar-width: -0\.8/);
+});
+
+test("column/bar without showValues still uses the normal chart.columnchart/barchart wrapper", () => {
+  const data = [{ label: "Mon", value: 42 }];
+  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data });
+  assert.match(column, /chart\.columnchart\(/);
+  assert.doesNotMatch(column, /plot\.annotate\(/);
+});
+
+test("pie showPercentage appends each slice's share of the total to its label, summing to exactly 100.00%", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    showLegend: false,
+    showPercentage: true,
+    data: [
+      { label: "A", value: 1 },
+      { label: "B", value: 1 },
+      { label: "C", value: 1 },
+    ],
+  });
+  // Naive independent rounding of 1/3 each gives 33.33 x3 = 99.99, not
+  // 100.00 — largest-remainder apportionment must bump exactly one entry
+  // up to 33.34 so the three sum to exactly 100.00.
+  assert.match(typ, /A \(33\.34%\)/);
+  assert.match(typ, /B \(33\.33%\)/);
+  assert.match(typ, /C \(33\.33%\)/);
+});
+
+test("pie showPercentage: false leaves labels unchanged", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    showLegend: true,
+    showPercentage: false,
+    data: [{ label: "A", value: 1 }],
+  });
+  assert.match(typ, /label: "A"/);
+  assert.doesNotMatch(typ, /%/);
 });
