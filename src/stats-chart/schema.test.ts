@@ -20,13 +20,25 @@ test("accepts a valid column chart spec", () => {
   assert.equal(result.chartType, "column");
 });
 
-test("accepts a valid pyramid chart spec", () => {
+test("accepts a valid line chart spec", () => {
   const result = statsChartSpecSchema.parse({
     kind: "statsChart",
-    chartType: "pyramid",
-    data: [{ label: "Top", value: 10 }],
+    chartType: "line",
+    data: [{ label: "Mon", value: 10 }],
   });
-  assert.equal(result.chartType, "pyramid");
+  assert.equal(result.chartType, "line");
+});
+
+test("accepts a valid scatter chart spec", () => {
+  const result = statsChartSpecSchema.parse({
+    kind: "statsChart",
+    chartType: "scatter",
+    data: [{ x: 1, y: 2 }],
+  });
+  assert.equal(result.chartType, "scatter");
+  if (result.chartType === "scatter") {
+    assert.equal(result.trendLine, "none");
+  }
 });
 
 test("pie chart defaults showLegend to true", () => {

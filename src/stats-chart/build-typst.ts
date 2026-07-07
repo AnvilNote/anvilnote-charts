@@ -1,4 +1,4 @@
-import type { CategoricalEntry, StatsChartSpec } from "./schema.js";
+import type { CategoricalEntry, ScatterEntry, StatsChartSpec } from "./schema.js";
 
 // Pinned to whatever versions are staged under
 // anvilnote-desktop/resources/typst-packages/preview/{cetz,cetz-plot}/<version>/
@@ -55,10 +55,18 @@ const FONT_SET_TEXT: Record<"sans" | "serif", string> = {
 // Applied to both "bottom" (column/line's horizontal category axis) and
 // "left" (bar's vertical category axis) unconditionally — harmless extra
 // clearance on whichever axis carries numeric (not category) labels too.
-const AXIS_TICK_LABEL_CLEARANCE = [
-  `import cetz.draw: set-style`,
-  `set-style(axes: (bottom: (tick: (label: (offset: 1cm))), left: (tick: (label: (offset: 1cm)))))`,
-].join("\n  ");
+// yLabelAngleOverride (", label: (angle: 0deg)" for yLabelRotated:
+// false, else "") must be spliced INSIDE the "left" dict's own closing
+// paren, not appended as a second separate "left: (...)" entry — Typst
+// dict literals reject duplicate keys outright ("duplicate key: left",
+// a hard compile error), confirmed via a real compile.
+function axisTickLabelClearance(yLabelAngleOverride = ""): string {
+  const leftDictContents = `tick: (label: (offset: 1cm))${yLabelAngleOverride}`;
+  return [
+    `import cetz.draw: set-style`,
+    `set-style(axes: (bottom: (tick: (label: (offset: 1cm))), left: (${leftDictContents})))`,
+  ].join("\n  ");
+}
 
 // Default grayscale cycle — AnvilNote's design language has zero color
 // hues (see function-plot's own DASH_CYCLE/COLOR_CYCLE rationale), so new
@@ -87,6 +95,74 @@ function luminance(hexColor: string): number {
 
 function contrastingTextColor(hexColor: string): "white" | "black" {
   return luminance(hexColor) < 0.4 ? "white" : "black";
+}
+
+// Per explicit feedback: chart TEXT (labels, legend) follows the chosen
+// fontFamily, but NUMBERS (axis tick numbers, value/percentage labels)
+// always use Typst's math font instead, regardless of fontFamily. Typst's
+// math-mode content ($...$) uses its own separate font resolution (New
+// Computer Modern Math, bundled — see anvilnote-renderer's fonts/math/
+// directory), NOT the ambient #set text(font:...) — confirmed via a real
+// compile that wrapping a number in $...$ renders it in the math font
+// while surrounding text stays in the chosen fontFamily. This needs no
+// extra font-setting code of its own; simply wrapping every raw numeric
+// output in $...$ (instead of plain text) is sufficient.
+function mathNumber(value: string): string {
+  return `$${value}$`;
+}
+
+// cetz-plot's own auto-generated axis tick numbers (0, 20, 40, ...) are
+// rendered via each axis's own `x-format`/`y-format` callback — passing a
+// function here (rather than leaving it `auto`) renders every tick number
+// in math mode too, matching mathNumber's treatment of our own value/
+// percentage annotations. Confirmed via a real compile that `(v) => $#v$`
+// is a valid formatter for this parameter (mirrors `plot.formats.decimal`,
+// cetz-plot's own built-in formatter, which is likewise just a function
+// taking a value and returning content).
+const MATH_TICK_FORMAT = "(v) => $#v$";
+
+// Custom x-label/y-label text + optional y-axis label rotation, shared by
+// bar/column/line (the three chart types built on cetz-plot's plot.plot —
+// see axisLabelFields's own comment in schema.ts for why pie/boxwhisker
+// don't get this). An empty string means "no label" (`none`), not
+// cetz-plot's own literal "x"/"y" placeholder fallback (see
+// plot/util.typ's `get-axis-option(name, "label", $#name$)`) — showing a
+// meaningless single-letter default is worse than just hiding it.
+//
+// yLabelRotated's angle override must be set via `set-style(axes: (left:
+// (label: (angle: ...))))`, NOT a plot.plot named argument — axis LABEL
+// angle (as opposed to its offset/anchor) is only read from the ambient
+// style context by axes.typ's own rendering code (`_get-axis-style`,
+// keyed by the axis's PHYSICAL position "left"/"bottom", same style root
+// axisTickLabelClearance already uses for tick-label offset) — there's
+// no "y-label-angle" plot.plot keyword. The "left" position is always
+// where cetz-plot physically renders the axis NAMED "y" (and "bottom" is
+// always where "x" renders), regardless of the `axes: ("y", "x")` swap
+// bar's own horizontal orientation uses internally — confirmed by reading
+// axes.typ's own `is-horizontal = name in ("bottom", "top")` check, which
+// keys off physical position, not the swapped axis name.
+//
+// leftAngleOverride is returned as just the fragment to splice INSIDE
+// axisTickLabelClearance's own "left" dict (see that function's own
+// comment for why it can't be a second separate "left: (...)" entry).
+function axisLabelArgs(spec: {
+  xLabel: string;
+  yLabel: string;
+  yLabelRotated: boolean;
+}): { plotArgs: string; leftAngleOverride: string } {
+  const xLabelArg = spec.xLabel.trim()
+    ? `x-label: [#"${escapeTypstString(spec.xLabel.trim())}"],\n    `
+    : `x-label: none,\n    `;
+  const yLabelArg = spec.yLabel.trim()
+    ? `y-label: [#"${escapeTypstString(spec.yLabel.trim())}"],\n    `
+    : `y-label: none,\n    `;
+  // Extra offset (1.2cm vs. the default .2cm) for the unrotated case only:
+  // a horizontal y-label occupies much more horizontal space right next
+  // to the axis than a vertical one does, and without the wider offset it
+  // visibly overlapped the axis's own numeric tick labels — caught via a
+  // real compile.
+  const leftAngleOverride = spec.yLabelRotated ? "" : ", label: (angle: 0deg, offset: 1.2cm)";
+  return { plotArgs: xLabelArg + yLabelArg, leftAngleOverride };
 }
 
 function escapeTypstString(value: string): string {
@@ -145,22 +221,6 @@ function percentageStrings(data: CategoricalEntry[]): string[] {
   return result.map((hundredthsPercent) => (hundredthsPercent / 100).toFixed(2));
 }
 
-// Same shape as categoricalDataLiteral, but each label has its entry's
-// percentage-of-total appended — used only when showPercentage is on.
-// Percentages are computed from the data itself (not user-entered), so
-// this always reflects the actual proportions and always sums to exactly
-// 100.00% (see percentageStrings above).
-function categoricalDataLiteralWithPercentage(data: CategoricalEntry[]): string {
-  const percentages = percentageStrings(data);
-  const rows = data
-    .map(
-      (entry, index) =>
-        `  (label: "${escapeTypstString(`${entry.label} (${percentages[index]}%)`)}", value: ${entry.value})`,
-    )
-    .join(",\n");
-  return `(\n${rows},\n)`;
-}
-
 // Builds cetz-plot piechart's `inner-label: (content: (value, label) =>
 // ...)` argument for the "onSlice" percentage placement — a lookup
 // function lazily reading from a Typst dictionary keyed by each entry's
@@ -173,11 +233,11 @@ function categoricalDataLiteralWithPercentage(data: CategoricalEntry[]): string 
 // case, not a crash, and not worth a hard validation error over.
 //
 // This can't be done by simply appending "(XX.XX%)" onto the label text
-// (categoricalDataLiteralWithPercentage's approach for "beside") because
-// inner-label and outer-label are two SEPARATE cetz-plot mechanisms reading
-// from two separate keys — outer-label defaults to the plain label, and
-// "onSlice" mode needs that label to stay untouched while placing the
-// percentage via inner-label instead. Confirmed via a real compile that
+// because inner-label and outer-label are two SEPARATE cetz-plot
+// mechanisms reading from two separate keys — outer-label defaults to
+// the plain label, and "onSlice" mode needs that label to stay untouched
+// while placing the percentage via inner-label instead. Confirmed via a
+// real compile that
 // inner-label's content function can be an arbitrary Typst function, and
 // that dict.at(key, default: ...) works with arbitrary string keys (not
 // just identifier-safe ones).
@@ -196,9 +256,33 @@ function innerLabelPercentageArg(data: CategoricalEntry[]): string {
       return `"${escapeTypstString(entry.label)}": (pct: "${percentages[index]}%", color: ${contrastingTextColor(color)})`;
     })
     .join(", ");
+  // Percentage rendered in math mode ($#entry.pct$, not plain text) per
+  // explicit feedback that numbers always use the math font — confirmed
+  // via a real compile that math mode can embed a plain string value via
+  // `#expr` and still typeset it (including its own "%" character), same
+  // as mathNumber's other call sites.
   return `,\n    inner-label: (content: (value, label) => {
       let entry = (${entries}).at(label, default: none)
-      if entry == none { none } else { text(fill: entry.color)[#entry.pct] }
+      if entry == none { none } else { text(fill: entry.color)[$#entry.pct$] }
+    })`;
+}
+
+// "beside" placement's equivalent of innerLabelPercentageArg above, but
+// for piechart's OUTER label instead — used in place of
+// categoricalDataLiteralWithPercentage's older "mutate the label string"
+// approach, which baked the percentage into the SAME plain string as the
+// label (so the whole thing rendered in one ambient font, with no way to
+// give the percentage its own math-mode treatment). A content function
+// can mix an ambient-font label with a math-mode percentage in one
+// return value, which a single mutated string cannot.
+function outerLabelPercentageArg(data: CategoricalEntry[]): string {
+  const percentages = percentageStrings(data);
+  const entries = data
+    .map((entry, index) => `"${escapeTypstString(entry.label)}": "${percentages[index]}%"`)
+    .join(", ");
+  return `outer-label: (content: (value, label) => {
+      let pct = (${entries}).at(label, default: none)
+      if pct == none { label } else { [#label #h(0.3em) $#pct$] }
     })`;
 }
 
@@ -386,7 +470,7 @@ function columnValueAnnotationsLiteral(data: CategoricalEntry[]): string {
   return data
     .map(
       (entry, index) =>
-        `      content((${index}, ${entry.value} + _label-offset), anchor: "south", [#"${escapeTypstString(formatValueLabel(entry.value))}"])`,
+        `      content((${index}, ${entry.value} + _label-offset), anchor: "south", [${mathNumber(formatValueLabel(entry.value))}])`,
     )
     .join("\n");
 }
@@ -402,10 +486,96 @@ function barValueAnnotationsLiteral(data: CategoricalEntry[]): string {
   return data
     .map(
       (entry, index) =>
-        `      content((${entry.value} + _label-offset, ${n - index - 1}), anchor: "west", [#"${escapeTypstString(formatValueLabel(entry.value))}"])`,
+        `      content((${entry.value} + _label-offset, ${n - index - 1}), anchor: "west", [${mathNumber(formatValueLabel(entry.value))}])`,
     )
     .join("\n");
 }
+
+// Ordinary least-squares straight-line fit: y = slope * x + intercept.
+// Standard closed-form solution (no matrix libraries needed for a single
+// predictor). Returns null when the data has zero x-variance (all points
+// share the same x — a vertical "line" has no slope/intercept in this
+// y-as-a-function-of-x form), so the caller can skip drawing a
+// meaningless trend line rather than dividing by zero.
+function linearRegression(points: ScatterEntry[]): { slope: number; intercept: number } | null {
+  const n = points.length;
+  const meanX = points.reduce((sum, p) => sum + p.x, 0) / n;
+  const meanY = points.reduce((sum, p) => sum + p.y, 0) / n;
+  const denominator = points.reduce((sum, p) => sum + (p.x - meanX) ** 2, 0);
+  if (denominator === 0) return null;
+  const numerator = points.reduce((sum, p) => sum + (p.x - meanX) * (p.y - meanY), 0);
+  const slope = numerator / denominator;
+  return { slope, intercept: meanY - slope * meanX };
+}
+
+// LOWESS (locally weighted scatterplot smoothing): for each of a fixed
+// number of evaluation points spanning the data's own x-range, fits a
+// local WEIGHTED linear regression using only nearby points (tricube
+// kernel weights, standard LOWESS choice), producing a smooth curve that
+// follows local trends rather than one global straight line. This is a
+// single-pass (non-robust) LOWESS — no outlier-downweighting iterations
+// — which is the standard simplification for a chart-annotation feature
+// rather than a statistical-analysis tool; still uses the same
+// bandwidth/tricube-weight mechanics as a full implementation.
+//
+// bandwidthFraction (0.3, i.e. 30% of all points) controls how "local"
+// each fit is — smaller values follow the data more tightly (more
+// wiggly), larger values smooth out more. 0.3 is a commonly used default
+// starting point for LOWESS (matches R's own `lowess()` default `f =
+// 2/3`... actually tightened to 0.3 here since chart data sets tend to
+// be smaller than typical statistical samples, where too-wide a window
+// flattens real local structure).
+const LOWESS_BANDWIDTH_FRACTION = 0.3;
+const LOWESS_EVAL_POINTS = 40;
+
+function lowess(points: ScatterEntry[]): { x: number; y: number }[] {
+  const n = points.length;
+  const windowSize = Math.max(2, Math.ceil(n * LOWESS_BANDWIDTH_FRACTION));
+  const xs = points.map((p) => p.x);
+  const xMin = Math.min(...xs);
+  const xMax = Math.max(...xs);
+
+  function fitAt(x0: number): number {
+    // Nearest `windowSize` points BY DISTANCE to x0 (not a fixed x-radius)
+    // — this is what makes bandwidth "adaptive" to the data's own density,
+    // the standard LOWESS approach (a fixed-radius window would leave
+    // sparse regions with too few points to fit).
+    const byDistance = [...points].sort((a, b) => Math.abs(a.x - x0) - Math.abs(b.x - x0));
+    const window = byDistance.slice(0, windowSize);
+    const maxDist = Math.max(...window.map((p) => Math.abs(p.x - x0))) || 1;
+
+    // Tricube kernel: (1 - (d/maxDist)^3)^3 — standard LOWESS weight
+    // function, giving full weight at d=0 and zero weight at the window
+    // edge, with a smooth falloff in between.
+    const weights = window.map((p) => {
+      const u = Math.min(Math.abs(p.x - x0) / maxDist, 1);
+      return (1 - u ** 3) ** 3;
+    });
+
+    // Weighted linear regression on the local window.
+    const sumW = weights.reduce((s, w) => s + w, 0);
+    const meanX = window.reduce((s, p, i) => s + weights[i] * p.x, 0) / sumW;
+    const meanY = window.reduce((s, p, i) => s + weights[i] * p.y, 0) / sumW;
+    const denominator = window.reduce((s, p, i) => s + weights[i] * (p.x - meanX) ** 2, 0);
+    if (denominator === 0) return meanY;
+    const numerator = window.reduce((s, p, i) => s + weights[i] * (p.x - meanX) * (p.y - meanY), 0);
+    const slope = numerator / denominator;
+    return meanY + slope * (x0 - meanX);
+  }
+
+  return Array.from({ length: LOWESS_EVAL_POINTS }, (_, i) => {
+    const x = xMin + ((xMax - xMin) * i) / (LOWESS_EVAL_POINTS - 1);
+    return { x, y: fitAt(x) };
+  });
+}
+
+// Single scatter color (not per-point) — a scatter plot's points are one
+// dataset, unlike bar/pie's per-slice colors; consistent with line
+// chart's own "one color for the whole series" design (see
+// buildStatsChartTypst's line branch), and there's no per-point `color`
+// field in scatterEntrySchema to override it with anyway.
+const SCATTER_POINT_COLOR = DEFAULT_COLOR_CYCLE[0];
+const TREND_LINE_COLOR = DEFAULT_COLOR_CYCLE[2];
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   // `plot` (not just `chart`) is needed by: the custom showValues
@@ -417,6 +587,7 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
   // import.
   const needsPlotImport =
     spec.chartType === "line" ||
+    spec.chartType === "scatter" ||
     ((spec.chartType === "bar" || spec.chartType === "column") && spec.showValues);
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
 #import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart${needsPlotImport ? ", plot" : ""}
@@ -450,11 +621,12 @@ ${FONT_SET_TEXT[spec.fontFamily]}`;
     // didn't have the same "floating above the last gridline" complaint).
     return `${header}
 #cetz.canvas({
-  ${AXIS_TICK_LABEL_CLEARANCE}
+  ${axisTickLabelClearance()}
   chart.boxwhisker(
     size: (${width}, ${BASE_VALUE_AXIS_DIMENSION}),
     label-key: "label",
     y-min: 0,
+    y-format: ${MATH_TICK_FORMAT},
     ${rotateTicksArg}(
 ${boxes},
     ),
@@ -463,49 +635,32 @@ ${boxes},
 `;
   }
 
-  const dataLiteral = categoricalDataLiteral(spec.data);
-
   if (spec.chartType === "pie") {
+    const dataLiteral = categoricalDataLiteral(spec.data);
     // legend: (label: none) is how cetz-plot's piechart suppresses its
     // otherwise-automatic legend (it renders as soon as any entry has a
     // label) — confirmed by a real compile; there's no separate boolean
     // "show legend" flag in its own API.
     const legendArg = spec.showLegend ? "" : ",\n    legend: (label: none)";
-    // "beside": percentage baked directly into each slice's own label
-    // text — piechart has no built-in "show percentage" option, but its
-    // label IS just whatever string label-key resolves to, so appending
-    // "(XX.XX%)" there is sufficient and needs no other change to the
-    // call itself. "onSlice": label text stays plain; percentage instead
-    // goes through inner-label, a genuinely separate cetz-plot mechanism
-    // (see innerLabelPercentageArg's own comment for why these can't
-    // share one code path).
-    const pieDataLiteral =
-      spec.showPercentage === "beside" ? categoricalDataLiteralWithPercentage(spec.data) : dataLiteral;
-    const innerLabelArg = spec.showPercentage === "onSlice" ? innerLabelPercentageArg(spec.data) : "";
+    // "beside" and "onSlice" both route percentage through a content
+    // FUNCTION (outer-label/inner-label respectively), not a mutated
+    // label string — see outerLabelPercentageArg/innerLabelPercentageArg's
+    // own comments for why a function is needed (mixing an ambient-font
+    // label with a math-mode percentage in one return value).
+    const percentageArg =
+      spec.showPercentage === "beside"
+        ? `,\n    ${outerLabelPercentageArg(spec.data)}`
+        : spec.showPercentage === "onSlice"
+          ? innerLabelPercentageArg(spec.data)
+          : "";
     return `${header}
 #cetz.canvas({
   chart.piechart(
-    ${pieDataLiteral},
-    value-key: "value",
-    label-key: "label",
-    radius: 3,
-    slice-style: ${colorArrayLiteral(spec.data)}${legendArg}${innerLabelArg}
-  )
-})
-`;
-  }
-
-  if (spec.chartType === "pyramid") {
-    // level-height defaults to 1 in cetz-plot; doubled to 2 per explicit
-    // feedback that the default rendered too small/cramped.
-    return `${header}
-#cetz.canvas({
-  chart.pyramid(
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
-    level-height: 2,
-    level-style: ${paletteLiteral(spec.data)},
+    radius: 3,
+    slice-style: ${colorArrayLiteral(spec.data)}${legendArg}${percentageArg}
   )
 })
 `;
@@ -513,16 +668,16 @@ ${boxes},
 
   if (spec.chartType === "line") {
     // cetz-plot has no dedicated "categorical line chart" wrapper (unlike
-    // bar/column/pyramid/pie) — built directly on plot.plot/plot.add, the
-    // same lower-level primitives chart.barchart/columnchart themselves
-    // sit on top of (see showValues's own comment below for that same
-    // pattern). Each entry's x position is just its own index, exactly
-    // like bar/column's category axis, NOT a continuous domain the way
+    // bar/column/pie) — built directly on plot.plot/plot.add, the same
+    // lower-level primitives chart.barchart/columnchart themselves sit on
+    // top of (see showValues's own comment below for that same pattern).
+    // Each entry's x position is just its own index, exactly like
+    // bar/column's category axis, NOT a continuous domain the way
     // function-plot's curves are.
     //
     // A connected line has ONE color, not one per point — the per-entry
-    // `color` override (meaningful for bar/pie/pyramid slices) doesn't
-    // apply here; only the first entry's resolved color (or the default
+    // `color` override (meaningful for bar/pie slices) doesn't apply
+    // here; only the first entry's resolved color (or the default
     // cycle's first color) is used for the whole line + its markers.
     const lineColor = resolveColor(spec.data[0], 0);
     const n = spec.data.length;
@@ -537,17 +692,25 @@ ${boxes},
           )
           .join(",\n")
       : plainTicksLiteral(spec.data, 0);
+    // y-min: 0 — same forced value-axis floor as bar/column/boxwhisker
+    // (per explicit feedback). Without it, cetz-plot auto-fits the y-min
+    // to the data's own minimum (e.g. ~80 for values clustered in the
+    // 90s-140s range), which left an unexplained-looking single gridline
+    // floating near the data instead of a full axis grounded at 0.
+    const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
     return `${header}
 #cetz.canvas({
-  ${AXIS_TICK_LABEL_CLEARANCE}
+  ${axisTickLabelClearance(leftAngleOverride)}
   plot.plot(
     size: (${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION}),
     axis-style: "scientific-auto",
     y-grid: true,
     y-tick-step: ${categoricalTickStep(spec.data)},
+    y-min: 0,
     y-max: ${axisMax},
+    y-format: ${MATH_TICK_FORMAT},
     x-tick-step: none,
-    x-ticks: (
+    ${axisLabelPlotArgs}x-ticks: (
 ${ticksLiteral},
     ),
     {
@@ -565,6 +728,74 @@ ${pointTuples},
 `;
   }
 
+  if (spec.chartType === "scatter") {
+    // Genuine numeric (x, y) points — a real scatter plot, unlike bar/
+    // column/line's categorical (label, value) shape (see
+    // scatterEntrySchema's own comment). Both axes are continuous numeric
+    // domains here, computed from the data itself (min/max with a small
+    // margin), not a fixed category-count-based size.
+    const pointTuples = spec.data.map((entry) => `      (${entry.x}, ${entry.y})`).join(",\n");
+    const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
+
+    // "linear": one straight line spanning the data's own x-range (2
+    // points is enough for cetz-plot's own "linear" line-mode to draw a
+    // straight segment between them). "lowess": a many-point smoothed
+    // curve (see lowess's own comment) connected with a spline for a
+    // smooth-looking curve rather than a jagged polyline.
+    let trendLinePlotAdd = "";
+    if (spec.trendLine === "linear") {
+      const fit = linearRegression(spec.data);
+      if (fit) {
+        const xs = spec.data.map((p) => p.x);
+        const xMin = Math.min(...xs);
+        const xMax = Math.max(...xs);
+        const p1 = fit.slope * xMin + fit.intercept;
+        const p2 = fit.slope * xMax + fit.intercept;
+        trendLinePlotAdd = `
+      plot.add(
+        ((${xMin}, ${p1}), (${xMax}, ${p2})),
+        style: (stroke: rgb("${TREND_LINE_COLOR}") + 2pt),
+      )`;
+      }
+    } else if (spec.trendLine === "lowess") {
+      const smoothed = lowess(spec.data);
+      const smoothedTuples = smoothed.map((p) => `      (${p.x}, ${p.y})`).join(",\n");
+      trendLinePlotAdd = `
+      plot.add(
+        (
+${smoothedTuples},
+        ),
+        line: "spline",
+        style: (stroke: rgb("${TREND_LINE_COLOR}") + 2pt),
+      )`;
+    }
+
+    return `${header}
+#cetz.canvas({
+  ${axisTickLabelClearance(leftAngleOverride)}
+  plot.plot(
+    size: (12, 8),
+    axis-style: "scientific-auto",
+    x-grid: true,
+    y-grid: true,
+    x-format: ${MATH_TICK_FORMAT},
+    y-format: ${MATH_TICK_FORMAT},
+    ${axisLabelPlotArgs}{
+      plot.add(
+        (
+${pointTuples},
+        ),
+        style: (stroke: none),
+        mark: "o",
+        mark-style: (stroke: rgb("${SCATTER_POINT_COLOR}"), fill: rgb("${SCATTER_POINT_COLOR}")),
+        mark-size: 0.12,
+      )${trendLinePlotAdd}
+    }
+  )
+})
+`;
+  }
+
   // bar (horizontal) and column (vertical) share the exact same call shape
   // in cetz-plot — only the function name and axis orientation differ
   // (confirmed by reading both barchart.typ and columnchart.typ: identical
@@ -572,6 +803,7 @@ ${pointTuples},
   // left-to-right); columnchart spreads them along its WIDTH (bars grow
   // bottom-to-top) — so which dimension scales with entry count flips
   // between the two, same reasoning as boxwhisker's width above.
+  const dataLiteral = categoricalDataLiteral(spec.data);
   const entryAxisDimension = scaledDimension(spec.data.length);
   const size =
     spec.chartType === "bar"
@@ -579,29 +811,33 @@ ${pointTuples},
       : `(${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION})`;
   const chartFn = spec.chartType === "bar" ? "barchart" : "columnchart";
   // barchart's category axis is y (so its VALUE axis, needing the
-  // tick-step/max fix, is x); columnchart's category axis is x (so its
-  // value axis is y) — confirmed by reading both files' own
-  // `x-tick-step: none` / category tick-list placement.
+  // tick-step/max/grid/format fixes, is x); columnchart's category axis
+  // is x (so its value axis is y) — confirmed by reading both files' own
+  // `x-tick-step: none` / category tick-list placement. showGridLines
+  // toggles the value axis's reference gridlines (cetz-plot's own
+  // x-grid/y-grid option); per explicit feedback, defaults true (existing
+  // behavior unchanged) with an option to turn them off.
   const valueAxisArgs =
     spec.chartType === "bar"
-      ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    x-max: ${categoricalAxisMax(spec.data)},\n    `
-      : `y-tick-step: ${categoricalTickStep(spec.data)},\n    y-max: ${categoricalAxisMax(spec.data)},\n    `;
+      ? `x-tick-step: ${categoricalTickStep(spec.data)},\n    x-max: ${categoricalAxisMax(spec.data)},\n    x-format: ${MATH_TICK_FORMAT},\n    x-grid: ${spec.showGridLines},\n    `
+      : `y-tick-step: ${categoricalTickStep(spec.data)},\n    y-max: ${categoricalAxisMax(spec.data)},\n    y-format: ${MATH_TICK_FORMAT},\n    y-grid: ${spec.showGridLines},\n    `;
   // Only columnchart's category labels run along the horizontal x-axis
   // (see hasLongLabels's own comment above for why barchart doesn't need
   // this). columnchart's own internal x-tick positions are 0-based.
   const rotateTicksArg =
     spec.chartType === "column" && hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 0) : "";
+  const { plotArgs: axisLabelPlotArgs, leftAngleOverride } = axisLabelArgs(spec);
 
   if (!spec.showValues) {
     return `${header}
 #cetz.canvas({
-  ${AXIS_TICK_LABEL_CLEARANCE}
+  ${axisTickLabelClearance(leftAngleOverride)}
   chart.${chartFn}(
     ${dataLiteral},
     value-key: "value",
     label-key: "label",
     size: ${size},
-    ${valueAxisArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data)},
+    ${valueAxisArgs}${axisLabelPlotArgs}${rotateTicksArg}bar-style: ${paletteLiteral(spec.data)},
   )
 })
 `;
@@ -641,18 +877,19 @@ ${pointTuples},
 ${labelOffsetLet}
 #cetz.canvas({
   import cetz.draw: content
-  ${AXIS_TICK_LABEL_CLEARANCE}
+  ${axisTickLabelClearance(leftAngleOverride)}
   let _x-inset = calc.max(1, 0.8 / 2)
   plot.plot(
     size: ${size},
     axis-style: "scientific-auto",
-    y-grid: true,
+    y-grid: ${spec.showGridLines},
     y-tick-step: ${categoricalTickStep(spec.data)},
     y-max: ${axisMax},
+    y-format: ${MATH_TICK_FORMAT},
     x-min: -_x-inset,
     x-max: ${n} + _x-inset - 1,
     x-tick-step: none,
-    x-ticks: (
+    ${axisLabelPlotArgs}x-ticks: (
 ${ticksLiteral},
     ),
     plot-style: ${paletteLiteral(spec.data)},
@@ -690,18 +927,19 @@ ${columnValueAnnotationsLiteral(spec.data)}
 ${labelOffsetLet}
 #cetz.canvas({
   import cetz.draw: content
-  ${AXIS_TICK_LABEL_CLEARANCE}
+  ${axisTickLabelClearance(leftAngleOverride)}
   let _y-inset = calc.max(1, 0.8 / 2)
   plot.plot(
     size: ${size},
     axis-style: "scientific-auto",
-    x-grid: true,
+    x-grid: ${spec.showGridLines},
     x-tick-step: ${categoricalTickStep(spec.data)},
     x-max: ${axisMax},
+    x-format: ${MATH_TICK_FORMAT},
     y-min: -_y-inset,
     y-max: ${n} + _y-inset - 1,
     y-tick-step: none,
-    y-ticks: (
+    ${axisLabelPlotArgs}y-ticks: (
 ${barTicksLiteral},
     ),
     plot-style: ${paletteLiteral(spec.data)},
