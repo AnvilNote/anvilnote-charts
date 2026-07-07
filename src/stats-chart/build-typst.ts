@@ -151,6 +151,32 @@ function mathNumber(value: string): string {
 // taking a value and returning content).
 const MATH_TICK_FORMAT = "(v) => $#v$";
 
+// Scatter-only: both axes start at 0 (x-min/y-min are always 0, unlike
+// categorical charts whose value axis floor is the only 0), so cetz-plot's
+// own independent x-tick and y-tick label generation each draw their own
+// "0" right at the shared origin corner — two overlapping/duplicate "0"
+// labels. Suppresses BOTH native ones (returning `none` for v == 0); a
+// single replacement "0" is drawn once via plot.annotate + content
+// instead (see ORIGIN_ZERO_ANNOTATE below), offset down-left of the
+// corner so it doesn't collide with either axis line.
+const SCATTER_ZERO_SUPPRESSED_FORMAT = "(v) => if v == 0 { none } else { $#v$ }";
+
+// anchor: "south-east" + padding: .5em places the content's own
+// south-east corner .5em away from (0,0) — i.e. the text sits down and
+// to the left of the origin point, per explicit feedback ("原點左下方
+// 0.5em 處"). "north-east" was tried FIRST and looked plausible from its
+// own name, but a real compile showed it keeps the "0" level with the
+// x-axis (no vertical offset at all) — cetz's content() anchors the
+// coordinate to the text's BASELINE by default regardless of the
+// anchor's own north/south component in this particular case; "south-
+// east" was the anchor that actually produced a real diagonal (down and
+// left) offset when tested empirically against several candidates.
+const ORIGIN_ZERO_ANNOTATE = `
+      plot.annotate({
+        import cetz.draw: content
+        content((0, 0), $0$, anchor: "south-east", padding: .5em)
+      })`;
+
 // Custom x-label/y-label text + optional y-axis label rotation, shared by
 // bar/column/line (the three chart types built on cetz-plot's plot.plot —
 // see axisLabelFields's own comment in schema.ts for why pie/boxwhisker
@@ -738,7 +764,12 @@ function lowess(points: ScatterEntry[]): { x: number; y: number }[] {
 // chart's own "one color for the whole series" design (see
 // buildStatsChartTypst's line branch), and there's no per-point `color`
 // field in scatterEntrySchema to override it with anyway.
-const SCATTER_POINT_COLOR = DEFAULT_COLOR_CYCLE[0];
+//
+// Deliberately NOT DEFAULT_COLOR_CYCLE[0] (the Economist red) anymore —
+// per explicit feedback swapping the two scatter defaults: points are
+// near-black now, and trendLineColor's own schema default (schema.ts)
+// takes the red instead.
+const SCATTER_POINT_COLOR = "#181818";
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
   // `plot` (not just `chart`) is needed by: the custom showValues
@@ -967,8 +998,8 @@ ${smoothedTuples},
     y-min: 0,
     y-max: ${yAxis.max},
     y-tick-step: ${yAxis.step},
-    x-format: ${MATH_TICK_FORMAT},
-    y-format: ${MATH_TICK_FORMAT},
+    x-format: ${SCATTER_ZERO_SUPPRESSED_FORMAT},
+    y-format: ${SCATTER_ZERO_SUPPRESSED_FORMAT},
     ${axisLabelPlotArgs}{
       plot.add(
         (
@@ -978,7 +1009,7 @@ ${pointTuples},
         mark: "o",
         mark-style: (stroke: rgb("${SCATTER_POINT_COLOR}"), fill: rgb("${SCATTER_POINT_COLOR}")),
         mark-size: 0.12,
-      )${trendLinePlotAdd}
+      )${trendLinePlotAdd}${ORIGIN_ZERO_ANNOTATE}
     }
   )
 })

@@ -164,15 +164,18 @@ const lineChartSchema = categoricalBase.extend({
 const TREND_LINE_KINDS = ["none", "linear", "lowess"] as const;
 // User-pickable trend-line color, separate from the scatter points' own
 // SCATTER_POINT_COLOR — defaulted (not required) so a spec predating this
-// field still validates; build-typst.ts falls back to its own
-// TREND_LINE_COLOR constant when this is left at the default gray.
+// field still validates. Default is the Economist red (DEFAULT_COLOR_CYCLE's
+// own first color, build-typst.ts) per explicit feedback swapping the two
+// defaults: points default to a near-black (#181818, build-typst.ts's own
+// SCATTER_POINT_COLOR), trend line defaults to red — previously the other
+// way around (points red, trend line gray).
 const scatterChartSchema = z.object({
   kind: z.literal("statsChart"),
   chartType: z.literal("scatter"),
   data: z.array(scatterEntrySchema).min(1).max(SCATTER_MAX_ENTRIES),
   fontFamily: fontFamilySchema,
   trendLine: z.enum(TREND_LINE_KINDS).default("none"),
-  trendLineColor: z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value").default("#737373"),
+  trendLineColor: z.string().regex(HEX_COLOR_PATTERN, "Color must be a 6-digit hex value").default("#E3120B"),
   // Value axis reference gridlines — same concept as bar/column's own
   // showGridLines, defaulted true (existing behavior unchanged).
   showGridLines: z.boolean().default(true),
