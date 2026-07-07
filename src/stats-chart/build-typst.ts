@@ -508,7 +508,7 @@ const BASE_VALUE_AXIS_DIMENSION = 8;
 // same horizontal crowding problem regardless of label length.
 //
 // Mechanism: passing an explicit `x-ticks:` array of (position, content)
-// pairs — with the content itself pre-wrapped in `rotate(45deg, ...)` —
+// pairs — with the content itself pre-wrapped in `rotate(-45deg, ...)` —
 // scopes the rotation to ONLY the x-axis's tick labels. An earlier
 // approach used cetz's ambient `draw.set-style(axes: (tick: (label:
 // (angle: ...))))`, but that style root applies to EVERY axis sharing
@@ -545,11 +545,18 @@ function hasLongLabels(entries: { label: string }[]): boolean {
 // below) is 1-based — the override's positions must match whichever
 // convention the specific chart already uses, confirmed via real
 // compiles for both.
+// -45deg, not +45deg: real bug caught via a live screenshot — a positive
+// angle tilted labels the WRONG way (reading bottom-to-top, like "/",
+// each label's start floating away from its own tick toward the
+// NEXT one). -45deg tilts like "\", anchored at its own tick and
+// reading naturally left-to-right when you tilt your head right,
+// matching the standard convention (Excel/matplotlib-style rotated
+// category labels). Confirmed via a real compile comparing both signs.
 function rotatedXTicksLiteral(entries: { label: string }[], startIndex: number): string {
   const ticks = entries
     .map(
       (entry, index) =>
-        `      (${startIndex + index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+        `      (${startIndex + index}, rotate(-45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
     )
     .join(",\n");
   return `x-ticks: (\n${ticks},\n    ),\n    `;
@@ -803,7 +810,7 @@ ${boxes},
       ? spec.data
           .map(
             (entry, index) =>
-              `      (${index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+              `      (${index}, rotate(-45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
           )
           .join(",\n")
       : plainTicksLiteral(spec.data, 0);
@@ -1024,7 +1031,7 @@ ${pointTuples},
       ? spec.data
           .map(
             (entry, index) =>
-              `      (${index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+              `      (${index}, rotate(-45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
           )
           .join(",\n")
       : plainTicksLiteral(spec.data, 0);

@@ -319,8 +319,8 @@ test("column chart rotates labels via an explicit x-ticks override when a label 
     ],
   });
   assert.match(typ, /x-ticks: \(/);
-  assert.match(typ, /\(0, rotate\(45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
-  assert.match(typ, /\(1, rotate\(45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
+  assert.match(typ, /\(0, rotate\(-45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
+  assert.match(typ, /\(1, rotate\(-45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
 });
 
 test("column chart does not add an x-ticks override when all labels are short", () => {
@@ -391,8 +391,8 @@ test("boxwhisker rotates labels via an x-ticks override, 1-indexed to match its 
       { label: "Week2-Tuesday", min: 0, q1: 1, median: 2, q3: 3, max: 4 },
     ],
   });
-  assert.match(typ, /\(1, rotate\(45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
-  assert.match(typ, /\(2, rotate\(45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
+  assert.match(typ, /\(1, rotate\(-45deg, reflow: true\)\[#"Week2-Monday"\]\)/);
+  assert.match(typ, /\(2, rotate\(-45deg, reflow: true\)\[#"Week2-Tuesday"\]\)/);
 });
 
 test("rotated tick content escapes markup-sensitive characters as a safe string, not raw markup", () => {
@@ -413,7 +413,7 @@ test("rotated tick content escapes markup-sensitive characters as a safe string,
     yLabelRotated: true,
     data: [{ label: '#dangerous "quote" *and* stuff-long', value: 10 }],
   });
-  assert.match(typ, /rotate\(45deg, reflow: true\)\[#"#dangerous \\"quote\\" \*and\* stuff-long"\]/);
+  assert.match(typ, /rotate\(-45deg, reflow: true\)\[#"#dangerous \\"quote\\" \*and\* stuff-long"\]/);
 });
 
 test("escapes double quotes in labels", () => {
