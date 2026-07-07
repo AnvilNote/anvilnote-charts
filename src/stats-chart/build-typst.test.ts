@@ -722,6 +722,51 @@ test("scatter chart's tick step only ever chooses a 5-or-10-per-decade step, nev
   assert.match(typ, /x-max: 15\b/);
 });
 
+test("scatter chart's tick step targets ~5 ticks instead of always rounding to the widest decade", () => {
+  // Real bug, caught via a live screenshot: a y max of ~520 was
+  // rendering with y-max: 1000 (step 500 — only 2 ticks total) instead
+  // of a step that actually fits the data. The old algorithm derived
+  // "5 or 10" from the rough step's OWN decade only (104 normalizes to
+  // 1.04 against magnitude 100, which the old code always rounded UP to
+  // "5" since there was no "1" option) — the fix scores every 5-or-10
+  // candidate across ALL decades by how close its resulting tick count
+  // is to a target of 5, correctly landing on step 100 (6 ticks) here
+  // instead of step 500 (2 ticks).
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ x: 1, y: 520 }],
+  });
+  assert.match(typ, /y-tick-step: 100\b/);
+  assert.match(typ, /y-max: 600\b/);
+  assert.doesNotMatch(typ, /y-max: 1000\b/);
+});
+
+test("scatter chart's x-axis gets the same targeted tick-step fix as y (computed independently)", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "scatter",
+    fontFamily: "sans",
+    trendLine: "none",
+    trendLineColor: "#737373",
+    showGridLines: true,
+    xLabel: "",
+    yLabel: "",
+    yLabelRotated: true,
+    data: [{ x: 520, y: 1 }],
+  });
+  assert.match(typ, /x-tick-step: 100\b/);
+  assert.match(typ, /x-max: 600\b/);
+  assert.doesNotMatch(typ, /x-max: 1000\b/);
+});
+
 test("scatter chart's showGridLines toggles both axes' gridlines together", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
