@@ -89,6 +89,15 @@ test("boxwhisker chart maps median to q2 and scales width with entry count", () 
   assert.match(typ, /size: \(6, 8\)/);
 });
 
+test("boxwhisker always fixes the value axis floor at 0, regardless of the data's own min", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "boxwhisker",
+    data: [{ label: "A", min: 10, q1: 20, median: 30, q3: 40, max: 50 }],
+  });
+  assert.match(typ, /y-min: 0/);
+});
+
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
   const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", data: manyEntries });

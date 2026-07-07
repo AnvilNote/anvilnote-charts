@@ -215,11 +215,19 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // Our own box data literal above uses 1-based x positions (x: index+1),
     // so the tick-position override must match that, not start at 0.
     const rotateTicksArg = hasLongLabels(spec.data) ? rotatedXTicksLiteral(spec.data, 1) : "";
+    // y-min: 0 — the value axis always starts at 0 regardless of the
+    // data's own min (e.g. a box-whisker summary whose lowest value is
+    // 10 still gets a y-axis floor of 0, not 10), per explicit feedback.
+    // Only the floor is fixed; y-max is left to cetz-plot's own
+    // auto-fit, unlike bar/columnchart's explicit categoricalAxisMax
+    // rounding below (box-whisker's value spread is usually tighter and
+    // didn't have the same "floating above the last gridline" complaint).
     return `${header}
 #cetz.canvas({
   chart.boxwhisker(
     size: (${width}, ${BASE_VALUE_AXIS_DIMENSION}),
     label-key: "label",
+    y-min: 0,
     ${rotateTicksArg}(
 ${boxes},
     ),
