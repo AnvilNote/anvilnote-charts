@@ -356,46 +356,35 @@ function categoricalAxisMax(data: CategoricalEntry[]): number {
   return Math.ceil(maxValue / step) * step;
 }
 
-// Scatter's own tick step, restricted to a "5" or "10" per decade (5,
-// 50, 500, ... or 10, 100, 1000, ...) — per explicit feedback, NOT the
-// general 1/2/5/10 rounding niceTickStep uses elsewhere.
+// Scatter's own tick step, restricted to a "10 per decade" step only
+// (10, 100, 1000, ... or 0.1, 0.01, ...) — per explicit feedback
+// dropping the earlier "5 or 10" candidate set down to just "10", NOT
+// the general 1/2/5/10 rounding niceTickStep uses elsewhere.
 //
-// Real bug in an earlier version of this function: it derived the
-// candidate's DECADE from the rough step's own magnitude (floor(log10)),
-// then picked "5" or "10" WITHIN that one decade based on how close the
-// normalized value was to 5 — but a rough step like 104 (max value ~520)
-// normalizes to 1.04 against magnitude 100, which is much closer to "1"
-// than "5", yet the restricted candidate set had no "1" option and
-// defaulted to "5", landing on step 500 for data that only reaches 520.
-// That forced the axis to round up to 1000 — literally double the data's
-// real range — which is what a live screenshot caught.
-//
-// Fixed by scoring EVERY 5-or-10-per-decade candidate across a wide
-// range of decades by how many ticks it would actually produce
-// (ceil(maxAbsValue / step)), picking whichever gets closest to a target
-// of 5 ticks (ties broken toward the larger/coarser step, for a cleaner-
-// looking axis) — this correctly finds step 100 (not 500) for a max of
-// ~520, since 100 gives 6 ticks (closest to the target) while 500 gives
-// only 2.
+// Scores every 10-per-decade candidate across a wide range of decades
+// by how many ticks it would actually produce (ceil(maxAbsValue /
+// step)), picking whichever gets closest to a target of 5 ticks (ties
+// broken toward the larger/coarser step, for a cleaner-looking axis) —
+// same scoring approach as the earlier 5-or-10 version (see git history
+// for that version's own bug writeup), just with "5" dropped from the
+// candidate set per this later round of feedback.
 function scatterAxisTickStep(maxAbsValue: number): number {
-  if (maxAbsValue <= 0) return 5;
+  if (maxAbsValue <= 0) return 10;
   const TARGET_TICK_COUNT = 5;
   let best: { step: number; distance: number } | null = null;
   for (let decade = -6; decade <= 8; decade++) {
-    for (const perDecade of [5, 10]) {
-      const step = perDecade * 10 ** decade;
-      const tickCount = Math.ceil(maxAbsValue / step);
-      if (tickCount < 1) continue;
-      const distance = Math.abs(tickCount - TARGET_TICK_COUNT);
-      if (!best || distance < best.distance || (distance === best.distance && step > best.step)) {
-        best = { step, distance };
-      }
+    const step = 10 ** decade * 10;
+    const tickCount = Math.ceil(maxAbsValue / step);
+    if (tickCount < 1) continue;
+    const distance = Math.abs(tickCount - TARGET_TICK_COUNT);
+    if (!best || distance < best.distance || (distance === best.distance && step > best.step)) {
+      best = { step, distance };
     }
   }
   // best is never null here: maxAbsValue > 0 guarantees at least one
   // candidate produces tickCount >= 1 (the loop's decade range spans
-  // from 1e-6 to 1e8-per-decade, far wider than any realistic chart
-  // value), so the "!best" branch above always fires at least once.
+  // from 1e-5 to 1e9, far wider than any realistic chart value), so the
+  // "!best" branch above always fires at least once.
   return best!.step;
 }
 

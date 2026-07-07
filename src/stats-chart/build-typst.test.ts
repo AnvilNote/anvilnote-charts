@@ -699,11 +699,14 @@ test("scatter chart's value axes always floor at 0, regardless of the data's own
   assert.match(typ, /y-min: 0/);
 });
 
-test("scatter chart's tick step only ever chooses a 5-or-10-per-decade step, never 1/2", () => {
+test("scatter chart's tick step only ever chooses a 10-per-decade step, never 1/2/5", () => {
   // Data max of 13 would round to step 2 under the general niceTickStep
   // (used by bar/column) — scatter must use its own narrower step
-  // chooser instead, landing on 5 here (13/5 = 2.6 rough step, rounds up
-  // to the 5-per-decade candidate, not niceTickStep's "2").
+  // chooser instead, restricted to 10-per-decade candidates only (10,
+  // 100, ... — "5" was dropped from the candidate set per later
+  // feedback). Step 10 gives 2 ticks for a max of 13, closest to the
+  // target of 5 among the 10-only candidates (step 1 gives 13 ticks,
+  // step 100 gives 1).
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "scatter",
@@ -716,10 +719,10 @@ test("scatter chart's tick step only ever chooses a 5-or-10-per-decade step, nev
     yLabelRotated: true,
     data: [{ x: 13, y: 13 }],
   });
-  assert.match(typ, /x-tick-step: 5\b/);
-  assert.match(typ, /y-tick-step: 5\b/);
-  // max rounds up to the next step-5 multiple past 13: 15.
-  assert.match(typ, /x-max: 15\b/);
+  assert.match(typ, /x-tick-step: 10\b/);
+  assert.match(typ, /y-tick-step: 10\b/);
+  // max rounds up to the next step-10 multiple past 13: 20.
+  assert.match(typ, /x-max: 20\b/);
 });
 
 test("scatter chart's tick step targets ~5 ticks instead of always rounding to the widest decade", () => {
