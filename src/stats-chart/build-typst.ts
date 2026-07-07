@@ -13,6 +13,53 @@ import type { CategoricalEntry, StatsChartSpec } from "./schema.js";
 export const CETZ_VERSION = "0.4.0";
 export const CETZ_PLOT_VERSION = "0.1.2";
 
+// Font stacks mirroring anvilnote-renderer's own "title" (sans-ish) and
+// "body" (serif-ish) preset ROLES — see schema.ts's fontFamilySchema
+// comment for why these are duplicated literals, not a shared import.
+// Every font family listed here is already bundled for offline use (see
+// anvilnote-renderer's REQUIRED_FONT_FAMILIES / anvilnote-desktop's font
+// packaging), so this needs no new font files.
+const FONT_STACKS: Record<"sans" | "serif", string[]> = {
+  sans: ["Roboto", "TaiwanPearl", "思源黑體 TW", "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans Thai"],
+  serif: ["Tinos", "TW-MOE-Std-Song", "Noto Serif JP", "Noto Serif KR", "Noto Serif Thai", "Noto Serif"],
+};
+
+function fontStackLiteral(fontFamily: "sans" | "serif"): string {
+  return `(${FONT_STACKS[fontFamily].map((name) => `"${name}"`).join(", ")})`;
+}
+
+// Applied once at the top of the generated document — covers every piece
+// of chart text (axis ticks/labels, legend, value/percentage labels)
+// since #set text is ambient or all markup/content after it.
+const FONT_SET_TEXT: Record<"sans" | "serif", string> = {
+  sans: `#set text(font: ${fontStackLiteral("sans")})`,
+  serif: `#set text(font: ${fontStackLiteral("serif")})`,
+};
+
+// Real bug caught via a real compile: CJK category-axis tick labels (e.g.
+// "測試", "你好") visually overlap the bar/plot area right at the axis
+// line, even for very short labels — NOT gated by hasLongLabels's own
+// rotation threshold, which only fires for labels over 6 characters. The
+// default tick-label offset (cetz-plot's own axes.typ default,
+// tick.label.offset: .15cm) is sized for Latin text; most CJK fonts have
+// taller ascent/descent than Latin ones, so that fixed clearance isn't
+// enough and the glyphs' ink visibly intrudes into the bar area.
+// Reproduced with Typst's own default font (no custom font override), so
+// this isn't specific to any one bundled font. `chart.barchart/
+// columnchart` don't expose a "style:" or "tick offset" parameter of
+// their own (their `..plot-args` only forwards to plot.plot's NAMED
+// args) — the only place this style key resolves from is cetz's AMBIENT
+// style context (ctx.style), set via `set-style` BEFORE the chart call,
+// confirmed via real compile (passing style/bottom/tick as direct
+// keyword args to chart.columnchart had no effect; set-style did).
+// Applied to both "bottom" (column/line's horizontal category axis) and
+// "left" (bar's vertical category axis) unconditionally — harmless extra
+// clearance on whichever axis carries numeric (not category) labels too.
+const AXIS_TICK_LABEL_CLEARANCE = [
+  `import cetz.draw: set-style`,
+  `set-style(axes: (bottom: (tick: (label: (offset: 1cm))), left: (tick: (label: (offset: 1cm)))))`,
+].join("\n  ");
+
 // Default grayscale cycle — AnvilNote's design language has zero color
 // hues (see function-plot's own DASH_CYCLE/COLOR_CYCLE rationale), so new
 // entries default to shades of gray instead of introducing hues; a
@@ -361,16 +408,20 @@ function barValueAnnotationsLiteral(data: CategoricalEntry[]): string {
 }
 
 export function buildStatsChartTypst(spec: StatsChartSpec): string {
-  // `plot` (not just `chart`) is only needed by the custom showValues
-  // bar/column path below, which calls plot.plot/plot.add-bar/
-  // plot.annotate directly instead of going through chart.barchart/
-  // columnchart — importing it unconditionally would be a harmless but
-  // needless unused-import for every other chart type.
+  // `plot` (not just `chart`) is needed by: the custom showValues
+  // bar/column path (calls plot.plot/plot.add-bar/plot.annotate directly
+  // instead of going through chart.barchart/columnchart), and the line
+  // chart type (built directly on plot.plot/plot.add — cetz-plot has no
+  // dedicated categorical line-chart wrapper). Importing it unconditionally
+  // for every other chart type would be a harmless but needless unused
+  // import.
   const needsPlotImport =
-    (spec.chartType === "bar" || spec.chartType === "column") && spec.showValues;
+    spec.chartType === "line" ||
+    ((spec.chartType === "bar" || spec.chartType === "column") && spec.showValues);
   const header = `#import "@preview/cetz:${CETZ_VERSION}"
 #import "@preview/cetz-plot:${CETZ_PLOT_VERSION}": chart${needsPlotImport ? ", plot" : ""}
-#set page(width: auto, height: auto, margin: 8pt)`;
+#set page(width: auto, height: auto, margin: 8pt)
+${FONT_SET_TEXT[spec.fontFamily]}`;
 
   if (spec.chartType === "boxwhisker") {
     const boxes = spec.data
@@ -399,6 +450,7 @@ export function buildStatsChartTypst(spec: StatsChartSpec): string {
     // didn't have the same "floating above the last gridline" complaint).
     return `${header}
 #cetz.canvas({
+  ${AXIS_TICK_LABEL_CLEARANCE}
   chart.boxwhisker(
     size: (${width}, ${BASE_VALUE_AXIS_DIMENSION}),
     label-key: "label",
@@ -459,6 +511,60 @@ ${boxes},
 `;
   }
 
+  if (spec.chartType === "line") {
+    // cetz-plot has no dedicated "categorical line chart" wrapper (unlike
+    // bar/column/pyramid/pie) — built directly on plot.plot/plot.add, the
+    // same lower-level primitives chart.barchart/columnchart themselves
+    // sit on top of (see showValues's own comment below for that same
+    // pattern). Each entry's x position is just its own index, exactly
+    // like bar/column's category axis, NOT a continuous domain the way
+    // function-plot's curves are.
+    //
+    // A connected line has ONE color, not one per point — the per-entry
+    // `color` override (meaningful for bar/pie/pyramid slices) doesn't
+    // apply here; only the first entry's resolved color (or the default
+    // cycle's first color) is used for the whole line + its markers.
+    const lineColor = resolveColor(spec.data[0], 0);
+    const n = spec.data.length;
+    const axisMax = categoricalAxisMax(spec.data);
+    const entryAxisDimension = scaledDimension(n);
+    const pointTuples = spec.data.map((entry, index) => `      (${index}, ${entry.value})`).join(",\n");
+    const ticksLiteral = hasLongLabels(spec.data)
+      ? spec.data
+          .map(
+            (entry, index) =>
+              `      (${index}, rotate(45deg, reflow: true)[#"${escapeTypstString(entry.label)}"])`,
+          )
+          .join(",\n")
+      : plainTicksLiteral(spec.data, 0);
+    return `${header}
+#cetz.canvas({
+  ${AXIS_TICK_LABEL_CLEARANCE}
+  plot.plot(
+    size: (${entryAxisDimension}, ${BASE_VALUE_AXIS_DIMENSION}),
+    axis-style: "scientific-auto",
+    y-grid: true,
+    y-tick-step: ${categoricalTickStep(spec.data)},
+    y-max: ${axisMax},
+    x-tick-step: none,
+    x-ticks: (
+${ticksLiteral},
+    ),
+    {
+      plot.add(
+        (
+${pointTuples},
+        ),
+        mark: "o",
+        mark-style: (stroke: rgb("${lineColor}"), fill: rgb("${lineColor}")),
+        style: (stroke: rgb("${lineColor}")),
+      )
+    }
+  )
+})
+`;
+  }
+
   // bar (horizontal) and column (vertical) share the exact same call shape
   // in cetz-plot — only the function name and axis orientation differ
   // (confirmed by reading both barchart.typ and columnchart.typ: identical
@@ -489,6 +595,7 @@ ${boxes},
   if (!spec.showValues) {
     return `${header}
 #cetz.canvas({
+  ${AXIS_TICK_LABEL_CLEARANCE}
   chart.${chartFn}(
     ${dataLiteral},
     value-key: "value",
@@ -534,6 +641,7 @@ ${boxes},
 ${labelOffsetLet}
 #cetz.canvas({
   import cetz.draw: content
+  ${AXIS_TICK_LABEL_CLEARANCE}
   let _x-inset = calc.max(1, 0.8 / 2)
   plot.plot(
     size: ${size},
@@ -582,6 +690,7 @@ ${columnValueAnnotationsLiteral(spec.data)}
 ${labelOffsetLet}
 #cetz.canvas({
   import cetz.draw: content
+  ${AXIS_TICK_LABEL_CLEARANCE}
   let _y-inset = calc.max(1, 0.8 / 2)
   plot.plot(
     size: ${size},

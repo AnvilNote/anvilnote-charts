@@ -31,6 +31,20 @@ const boxWhiskerEntrySchema = z
     path: ["min"],
   });
 
+// Chart-wide text font — mirrors anvilnote-renderer's own "title"
+// (sans-ish: Roboto/TaiwanPearl/思源黑體 TW/Noto Sans...) vs. "body"
+// (serif-ish: Tinos/TW-MOE-Std-Song/Noto Serif...) preset ROLES, per
+// explicit feedback that chart font choice should match the app's
+// existing font vocabulary — NOT a shared import (anvilnote-charts and
+// anvilnote-renderer don't share source; see build-typst.ts's own
+// duplicated-stack comment), just the same two stack CONTENTS. Applies
+// to every piece of chart text (axis ticks, labels, legend, value/
+// percentage labels) via a single #set text(font: ...) at the top of
+// the generated document. Defaulted (not required): added after the
+// initial spec shape shipped.
+const FONT_FAMILIES = ["sans", "serif"] as const;
+const fontFamilySchema = z.enum(FONT_FAMILIES).default("sans");
+
 // bar/column/pyramid share one data shape and have no legend concept in
 // cetz-plot (no `legend` style key on any of the three) — only piechart
 // has a built-in legend, confirmed by reading cetz-plot's own source
@@ -38,6 +52,7 @@ const boxWhiskerEntrySchema = z
 const categoricalBase = z.object({
   kind: z.literal("statsChart"),
   data: z.array(categoricalEntrySchema).min(1).max(MAX_ENTRIES),
+  fontFamily: fontFamilySchema,
 });
 
 // showValues: prints each bar/column's own value above/beside it (rounded
@@ -53,6 +68,13 @@ const columnChartSchema = categoricalBase.extend({
   showValues: z.boolean().default(false),
 });
 const pyramidChartSchema = categoricalBase.extend({ chartType: z.literal("pyramid") });
+// Point-connected line over the same categorical (label, value) data shape
+// as bar/column — NOT a continuous function-plot; x positions are just
+// each entry's index, same as bar/column's own category axis. Since a
+// single connected line has one color (not one per point), only the
+// FIRST entry's resolved color (or the default cycle's first color) is
+// actually used — see build-typst.ts's lineChart branch.
+const lineChartSchema = categoricalBase.extend({ chartType: z.literal("line") });
 // Where (if at all) each slice's share of the total is displayed:
 //   - "none": no percentage shown
 //   - "onSlice": percentage rendered directly on the slice itself (via
@@ -73,6 +95,7 @@ const boxWhiskerChartSchema = z.object({
   kind: z.literal("statsChart"),
   chartType: z.literal("boxwhisker"),
   data: z.array(boxWhiskerEntrySchema).min(1).max(MAX_ENTRIES),
+  fontFamily: fontFamilySchema,
 });
 
 export const statsChartSpecSchema = z.discriminatedUnion("chartType", [
@@ -80,9 +103,12 @@ export const statsChartSpecSchema = z.discriminatedUnion("chartType", [
   columnChartSchema,
   pieChartSchema,
   pyramidChartSchema,
+  lineChartSchema,
   boxWhiskerChartSchema,
 ]);
 
 export type CategoricalEntry = z.infer<typeof categoricalEntrySchema>;
 export type BoxWhiskerEntry = z.infer<typeof boxWhiskerEntrySchema>;
 export type StatsChartSpec = z.infer<typeof statsChartSpecSchema>;
+export type FontFamily = z.infer<typeof fontFamilySchema>;
+export { FONT_FAMILIES };

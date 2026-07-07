@@ -6,6 +6,7 @@ import type { StatsChartSpec } from "./schema.js";
 test("generates imports pinned to the bundled cetz/cetz-plot versions", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: "Mon", value: 10 }],
@@ -17,6 +18,7 @@ test("generates imports pinned to the bundled cetz/cetz-plot versions", () => {
 test("bar chart uses chart.barchart with a palette built from resolved colors", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [
@@ -32,6 +34,7 @@ test("bar chart uses chart.barchart with a palette built from resolved colors", 
 test("column chart uses chart.columnchart", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [{ label: "Mon", value: 10 }],
@@ -42,6 +45,7 @@ test("column chart uses chart.columnchart", () => {
 test("pie chart uses a bare color array for slice-style and shows legend by default", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     data: [
       { label: "Male", value: 10 },
@@ -61,6 +65,7 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
 test("pie chart suppresses the legend when showLegend is false", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     data: [{ label: "Male", value: 10 }],
     showLegend: false,
@@ -72,6 +77,7 @@ test("pie chart suppresses the legend when showLegend is false", () => {
 test("pyramid chart uses chart.pyramid with a palette", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pyramid",
     data: [{ label: "Top", value: 10 }],
   });
@@ -82,6 +88,7 @@ test("pyramid chart uses chart.pyramid with a palette", () => {
 test("boxwhisker chart maps median to q2 and scales width with entry count", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "boxwhisker",
     data: [
       { label: "A", min: 10, q1: 20, median: 30, q3: 40, max: 50 },
@@ -98,6 +105,7 @@ test("boxwhisker chart maps median to q2 and scales width with entry count", () 
 test("boxwhisker always fixes the value axis floor at 0, regardless of the data's own min", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "boxwhisker",
     data: [{ label: "A", min: 10, q1: 20, median: 30, q3: 40, max: 50 }],
   });
@@ -106,8 +114,8 @@ test("boxwhisker always fixes the value axis floor at 0, regardless of the data'
 
 test("bar chart height scales with entry count; column chart width scales instead", () => {
   const manyEntries = Array.from({ length: 6 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: false, data: manyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data: manyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, data: manyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, data: manyEntries });
   assert.match(bar, /size: \(8, 12\)/);
   assert.match(column, /size: \(12, 8\)/);
 });
@@ -118,8 +126,8 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
   // overflowing. The clamp keeps the chart's overall size bounded; bars
   // just get proportionally narrower instead.
   const twentyEntries = Array.from({ length: 20 }, (_, i) => ({ label: `L${i}`, value: i }));
-  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: false, data: twentyEntries });
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data: twentyEntries });
+  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: false, data: twentyEntries });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, data: twentyEntries });
   const boxwhiskerData = Array.from({ length: 20 }, (_, i) => ({
     label: `L${i}`,
     min: 0,
@@ -128,7 +136,7 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
     q3: 3,
     max: 4,
   }));
-  const boxwhisker = buildStatsChartTypst({ kind: "statsChart", chartType: "boxwhisker", data: boxwhiskerData });
+  const boxwhisker = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "boxwhisker", data: boxwhiskerData });
   assert.match(bar, /size: \(8, 24\)/);
   assert.match(column, /size: \(24, 8\)/);
   assert.match(boxwhisker, /size: \(24, 8\)/);
@@ -137,6 +145,7 @@ test("entry-count scaling clamps at a max dimension, instead of growing unbounde
 test("bar chart computes a nice x-tick-step from the max value, avoiding crowded/overlapping tick labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [
@@ -150,6 +159,7 @@ test("bar chart computes a nice x-tick-step from the max value, avoiding crowded
 test("column chart computes a nice y-tick-step from the max value", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [{ label: "Test", value: 100 }],
@@ -160,6 +170,7 @@ test("column chart computes a nice y-tick-step from the max value", () => {
 test("nice tick step rounds to 1/2/5/10 x a power of ten, not an arbitrary fraction", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: "A", value: 13 }],
@@ -173,6 +184,7 @@ test("bar chart rounds axis max up to the next tick-step multiple past the data 
   // topmost labeled line. x-max should round up to 100.
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [
@@ -187,6 +199,7 @@ test("bar chart rounds axis max up to the next tick-step multiple past the data 
 test("column chart rounds axis max up using y-max", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [{ label: "A", value: 92 }],
@@ -198,6 +211,7 @@ test("column chart rounds axis max up using y-max", () => {
 test("axis max is unchanged when the data max is already an exact tick-step multiple", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: "A", value: 100 }],
@@ -208,6 +222,7 @@ test("axis max is unchanged when the data max is already an exact tick-step mult
 test("column chart rotates labels via an explicit x-ticks override when a label exceeds the long-label threshold", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [
@@ -223,6 +238,7 @@ test("column chart rotates labels via an explicit x-ticks override when a label 
 test("column chart does not add an x-ticks override when all labels are short", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [
@@ -236,6 +252,7 @@ test("column chart does not add an x-ticks override when all labels are short", 
 test("bar chart never rotates labels, even with long labels (category axis is vertical, not crowded)", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: "Week2-Monday", value: 10 }],
@@ -253,6 +270,7 @@ test("bar chart never rotates labels, even with long labels (category axis is ve
 test("rotation never uses the ambient axes style (would also rotate the value axis)", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [{ label: "Week2-Wednesday", value: 10 }],
@@ -263,6 +281,7 @@ test("rotation never uses the ambient axes style (would also rotate the value ax
 test("boxwhisker rotates labels via an x-ticks override, 1-indexed to match its own box x positions", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "boxwhisker",
     data: [
       { label: "Week2-Monday", min: 0, q1: 1, median: 2, q3: 3, max: 4 },
@@ -281,6 +300,7 @@ test("rotated tick content escapes markup-sensitive characters as a safe string,
   // like `#read("/etc/passwd")` or `*bold*` can never be reinterpreted.
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "column",
     showValues: false,
     data: [{ label: '#dangerous "quote" *and* stuff-long', value: 10 }],
@@ -291,6 +311,7 @@ test("rotated tick content escapes markup-sensitive characters as a safe string,
 test("escapes double quotes in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: 'Say "hi"', value: 1 }],
@@ -301,6 +322,7 @@ test("escapes double quotes in labels", () => {
 test("escapes newlines/tabs/carriage-returns in labels", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "bar",
     showValues: false,
     data: [{ label: "line1\nline2\ttabbed\r", value: 1 }],
@@ -325,6 +347,7 @@ test("single-entry bar/column/pyramid palette produces a valid 1-element array (
   for (const chartType of ["bar", "column", "pyramid"] as const) {
     const typ = buildStatsChartTypst({
       kind: "statsChart",
+    fontFamily: "sans",
       chartType,
       data,
       ...(chartType === "pyramid" ? {} : { showValues: false }),
@@ -340,6 +363,7 @@ test("single-entry bar/column/pyramid palette produces a valid 1-element array (
 test("single-entry pie slice-style produces a valid 1-element array (trailing comma)", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     data: [{ label: "Solo", value: 1 }],
     showLegend: true,
@@ -353,7 +377,7 @@ test("column/bar showValues bypasses chart.columnchart/barchart and annotates ea
     { label: "Mon", value: 42 },
     { label: "Tue", value: 78.456 },
   ];
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: true, data });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: true, data });
   assert.doesNotMatch(column, /chart\.columnchart\(/);
   assert.match(column, /plot\.add-bar\(/);
   assert.match(column, /plot\.annotate\(/);
@@ -361,7 +385,7 @@ test("column/bar showValues bypasses chart.columnchart/barchart and annotates ea
   assert.match(column, /\[#"78\.46"\]/);
   assert.match(column, /\[#"42"\]/);
 
-  const bar = buildStatsChartTypst({ kind: "statsChart", chartType: "bar", showValues: true, data });
+  const bar = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "bar", showValues: true, data });
   assert.doesNotMatch(bar, /chart\.barchart\(/);
   assert.match(bar, /plot\.add-bar\(/);
   assert.match(bar, /bar-width: -0\.8/);
@@ -369,7 +393,7 @@ test("column/bar showValues bypasses chart.columnchart/barchart and annotates ea
 
 test("column/bar without showValues still uses the normal chart.columnchart/barchart wrapper", () => {
   const data = [{ label: "Mon", value: 42 }];
-  const column = buildStatsChartTypst({ kind: "statsChart", chartType: "column", showValues: false, data });
+  const column = buildStatsChartTypst({ kind: "statsChart", fontFamily: "sans", chartType: "column", showValues: false, data });
   assert.match(column, /chart\.columnchart\(/);
   assert.doesNotMatch(column, /plot\.annotate\(/);
 });
@@ -377,6 +401,7 @@ test("column/bar without showValues still uses the normal chart.columnchart/barc
 test("pie showPercentage appends each slice's share of the total to its label, summing to exactly 100.00%", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     showLegend: false,
     showPercentage: "beside",
@@ -397,6 +422,7 @@ test("pie showPercentage appends each slice's share of the total to its label, s
 test("pie showPercentage: none leaves labels unchanged", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     showLegend: true,
     showPercentage: "none",
@@ -409,6 +435,7 @@ test("pie showPercentage: none leaves labels unchanged", () => {
 test("pie showPercentage: onSlice keeps labels plain and adds an inner-label lookup instead", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     showLegend: true,
     showPercentage: "onSlice",
@@ -443,6 +470,7 @@ test("contrastingTextColor picks white for dark slice fills and black for light 
   // which needs BLACK text, unlike the darker entries above).
   const typ = buildStatsChartTypst({
     kind: "statsChart",
+    fontFamily: "sans",
     chartType: "pie",
     showLegend: true,
     showPercentage: "onSlice",
@@ -456,4 +484,42 @@ test("contrastingTextColor picks white for dark slice fills and black for light 
   });
   assert.match(typ, /"A": \(pct: "20\.00%", color: white\)/);
   assert.match(typ, /"E": \(pct: "20\.00%", color: black\)/);
+});
+
+// Real bug: CJK category-axis tick labels (even very short ones, well
+// under hasLongLabels's own rotation threshold) visually overlapped the
+// bar/plot area right at the axis line — cetz-plot's default tick-label
+// offset is sized for Latin text, and most CJK fonts have taller ascent/
+// descent than Latin ones. Fixed via an ambient set-style call (axes:
+// bottom/left tick label offset) emitted into every affected chart's
+// canvas body — see AXIS_TICK_LABEL_CLEARANCE's own comment for why this
+// specific mechanism (not a "style:"/"bottom:" keyword arg, which has no
+// effect) was needed.
+test("bar/column/line/boxwhisker all set an explicit axis tick-label clearance style", () => {
+  const data = [
+    { label: "測試", value: 42 },
+    { label: "你好", value: 78 },
+  ];
+  for (const spec of [
+    { kind: "statsChart", chartType: "column", fontFamily: "sans", showValues: false, data } as const,
+    { kind: "statsChart", chartType: "bar", fontFamily: "sans", showValues: false, data } as const,
+    { kind: "statsChart", chartType: "column", fontFamily: "sans", showValues: true, data } as const,
+    { kind: "statsChart", chartType: "bar", fontFamily: "sans", showValues: true, data } as const,
+    { kind: "statsChart", chartType: "line", fontFamily: "sans", data } as const,
+  ]) {
+    const typ = buildStatsChartTypst(spec as StatsChartSpec);
+    assert.match(
+      typ,
+      /set-style\(axes: \(bottom: \(tick: \(label: \(offset: 1cm\)\)\), left: \(tick: \(label: \(offset: 1cm\)\)\)\)\)/,
+      `${spec.chartType} (showValues=${"showValues" in spec ? spec.showValues : "n/a"}) missing axis tick clearance`,
+    );
+  }
+
+  const boxwhisker = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "boxwhisker",
+    fontFamily: "sans",
+    data: [{ label: "測試", min: 10, q1: 20, median: 30, q3: 40, max: 50 }],
+  });
+  assert.match(boxwhisker, /set-style\(axes: \(bottom:/);
 });
