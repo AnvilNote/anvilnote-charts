@@ -53,14 +53,20 @@ const columnChartSchema = categoricalBase.extend({
   showValues: z.boolean().default(false),
 });
 const pyramidChartSchema = categoricalBase.extend({ chartType: z.literal("pyramid") });
+// Where (if at all) each slice's share of the total is displayed:
+//   - "none": no percentage shown
+//   - "onSlice": percentage rendered directly on the slice itself (via
+//     cetz-plot's inner-label mechanism), label text stays plain
+//   - "beside": percentage appended to the label text next to the slice
+//     (e.g. "Label (12.34%)"), matching the outer-label position
+// Computed from the data itself (not user-entered) either way, and always
+// sums to exactly 100.00% via largest-remainder rounding (see
+// build-typst.ts's percentageStrings).
+const PERCENTAGE_PLACEMENTS = ["none", "onSlice", "beside"] as const;
 const pieChartSchema = categoricalBase.extend({
   chartType: z.literal("pie"),
   showLegend: z.boolean().default(true),
-  // Appends each slice's share of the total (e.g. "Label (12.34%)") to its
-  // displayed label — computed from the data itself, not user-entered, and
-  // always sums to exactly 100.00% via largest-remainder rounding (see
-  // build-typst.ts's percentageLabels).
-  showPercentage: z.boolean().default(false),
+  showPercentage: z.enum(PERCENTAGE_PLACEMENTS).default("none"),
 });
 
 const boxWhiskerChartSchema = z.object({

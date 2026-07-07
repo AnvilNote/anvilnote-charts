@@ -51,7 +51,7 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
     // this test calls buildStatsChartTypst directly with a hand-built
     // object, so both fields must be set explicitly here.
     showLegend: true,
-    showPercentage: false,
+    showPercentage: "none",
   });
   assert.match(typ, /chart\.piechart\(/);
   assert.match(typ, /slice-style: \(rgb\("#000000"\), rgb\("#404040"\),\)/);
@@ -64,7 +64,7 @@ test("pie chart suppresses the legend when showLegend is false", () => {
     chartType: "pie",
     data: [{ label: "Male", value: 10 }],
     showLegend: false,
-    showPercentage: false,
+    showPercentage: "none",
   });
   assert.match(typ, /legend: \(label: none\)/);
 });
@@ -343,7 +343,7 @@ test("single-entry pie slice-style produces a valid 1-element array (trailing co
     chartType: "pie",
     data: [{ label: "Solo", value: 1 }],
     showLegend: true,
-    showPercentage: false,
+    showPercentage: "none",
   });
   assert.match(typ, /slice-style: \(rgb\("#000000"\),\)/);
 });
@@ -379,7 +379,7 @@ test("pie showPercentage appends each slice's share of the total to its label, s
     kind: "statsChart",
     chartType: "pie",
     showLegend: false,
-    showPercentage: true,
+    showPercentage: "beside",
     data: [
       { label: "A", value: 1 },
       { label: "B", value: 1 },
@@ -394,14 +394,66 @@ test("pie showPercentage appends each slice's share of the total to its label, s
   assert.match(typ, /C \(33\.33%\)/);
 });
 
-test("pie showPercentage: false leaves labels unchanged", () => {
+test("pie showPercentage: none leaves labels unchanged", () => {
   const typ = buildStatsChartTypst({
     kind: "statsChart",
     chartType: "pie",
     showLegend: true,
-    showPercentage: false,
+    showPercentage: "none",
     data: [{ label: "A", value: 1 }],
   });
   assert.match(typ, /label: "A"/);
   assert.doesNotMatch(typ, /%/);
+});
+
+test("pie showPercentage: onSlice keeps labels plain and adds an inner-label lookup instead", () => {
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    showLegend: true,
+    showPercentage: "onSlice",
+    data: [
+      { label: "A", value: 1 },
+      { label: "B", value: 1 },
+      { label: "C", value: 1 },
+    ],
+  });
+  // Labels themselves stay plain — no "(XX.XX%)" appended, unlike "beside".
+  assert.match(typ, /label: "A"/);
+  assert.match(typ, /label: "B"/);
+  assert.match(typ, /label: "C"/);
+  assert.doesNotMatch(typ, /label: "A \(/);
+  // Percentage goes through inner-label's own lookup dict instead — each
+  // entry pairs the percentage string with a pre-computed contrasting
+  // text color (see contrastingTextColor's own comment for why: plain
+  // black text is invisible against this feature's own default near-
+  // black slice colors).
+  assert.match(typ, /inner-label: \(content: \(value, label\) =>/);
+  // Default color cycle's first 3 entries (#000000, #404040, #737373) are
+  // all dark enough that white is the correct contrast choice for all
+  // three here.
+  assert.match(typ, /"A": \(pct: "33\.34%", color: white\)/);
+  assert.match(typ, /"B": \(pct: "33\.33%", color: white\)/);
+  assert.match(typ, /"C": \(pct: "33\.33%", color: white\)/);
+});
+
+test("contrastingTextColor picks white for dark slice fills and black for light ones", () => {
+  // Exercised indirectly through the pie onSlice path, using the default
+  // color cycle's full range (including its lightest entry, #d9d9d9,
+  // which needs BLACK text, unlike the darker entries above).
+  const typ = buildStatsChartTypst({
+    kind: "statsChart",
+    chartType: "pie",
+    showLegend: true,
+    showPercentage: "onSlice",
+    data: [
+      { label: "A", value: 1 },
+      { label: "B", value: 1 },
+      { label: "C", value: 1 },
+      { label: "D", value: 1 },
+      { label: "E", value: 1 },
+    ],
+  });
+  assert.match(typ, /"A": \(pct: "20\.00%", color: white\)/);
+  assert.match(typ, /"E": \(pct: "20\.00%", color: black\)/);
 });

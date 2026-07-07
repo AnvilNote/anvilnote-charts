@@ -23,6 +23,25 @@ function resolveColor(entry: CategoricalEntry, index: number): string {
   return entry.color ?? DEFAULT_COLOR_CYCLE[index % DEFAULT_COLOR_CYCLE.length];
 }
 
+// Relative luminance (WCAG formula, sRGB channels linearized) — used only
+// to pick a legible on-slice text color (white on a dark slice, black on
+// a light one). Not intended as a full WCAG contrast-ratio check (no
+// comparison against a specific text size/weight threshold); a simple
+// midpoint split is enough for pure black/white text against arbitrary
+// fills, and was caught as a REAL bug via a real compile: on-slice
+// percentage text is black by Typst's own default, which was completely
+// invisible against this feature's own default near-black slice colors
+// (#000000, #404040) until this fix.
+function luminance(hexColor: string): number {
+  const [r, g, b] = [0, 2, 4].map((offset) => parseInt(hexColor.slice(1 + offset, 3 + offset), 16) / 255);
+  const linear = (channel: number) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+function contrastingTextColor(hexColor: string): "white" | "black" {
+  return luminance(hexColor) < 0.4 ? "white" : "black";
+}
+
 function escapeTypstString(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
@@ -93,6 +112,47 @@ function categoricalDataLiteralWithPercentage(data: CategoricalEntry[]): string 
     )
     .join(",\n");
   return `(\n${rows},\n)`;
+}
+
+// Builds cetz-plot piechart's `inner-label: (content: (value, label) =>
+// ...)` argument for the "onSlice" percentage placement — a lookup
+// function lazily reading from a Typst dictionary keyed by each entry's
+// own (escaped) label string, embedded right above it. Labels are
+// expected to be unique per entry (the common case); if two entries
+// happen to share an identical label AND identical value, both slices
+// correctly show the same percentage; if they share a label but differ
+// in value, the dict key collision means both slices show whichever one
+// happens to be the LAST matching key in source order — a cosmetic edge
+// case, not a crash, and not worth a hard validation error over.
+//
+// This can't be done by simply appending "(XX.XX%)" onto the label text
+// (categoricalDataLiteralWithPercentage's approach for "beside") because
+// inner-label and outer-label are two SEPARATE cetz-plot mechanisms reading
+// from two separate keys — outer-label defaults to the plain label, and
+// "onSlice" mode needs that label to stay untouched while placing the
+// percentage via inner-label instead. Confirmed via a real compile that
+// inner-label's content function can be an arbitrary Typst function, and
+// that dict.at(key, default: ...) works with arbitrary string keys (not
+// just identifier-safe ones).
+//
+// Each entry's lookup value also carries a pre-computed contrasting text
+// color (white/black, via contrastingTextColor), NOT just the percentage
+// string — Typst's own default on-slice text color is black, which is
+// completely invisible against this feature's own default near-black
+// slice colors (#000000, #404040). Caught via a real compile showing an
+// entirely blank slice where "40.00%" should have been.
+function innerLabelPercentageArg(data: CategoricalEntry[]): string {
+  const percentages = percentageStrings(data);
+  const entries = data
+    .map((entry, index) => {
+      const color = resolveColor(entry, index);
+      return `"${escapeTypstString(entry.label)}": (pct: "${percentages[index]}%", color: ${contrastingTextColor(color)})`;
+    })
+    .join(", ");
+  return `,\n    inner-label: (content: (value, label) => {
+      let entry = (${entries}).at(label, default: none)
+      if entry == none { none } else { text(fill: entry.color)[#entry.pct] }
+    })`;
 }
 
 // bar/column validate their `bar-style` argument as a "plot-style" — a
@@ -359,15 +419,17 @@ ${boxes},
     // label) — confirmed by a real compile; there's no separate boolean
     // "show legend" flag in its own API.
     const legendArg = spec.showLegend ? "" : ",\n    legend: (label: none)";
-    // Percentage is baked directly into each slice's own label text
-    // (computed from the data itself, not a separate chart-library
-    // feature) rather than a piechart param — piechart has no built-in
-    // "show percentage" option, but its label IS just whatever string
-    // label-key resolves to, so appending "(XX.XX%)" there is sufficient
-    // and needs no other change to the call itself.
-    const pieDataLiteral = spec.showPercentage
-      ? categoricalDataLiteralWithPercentage(spec.data)
-      : dataLiteral;
+    // "beside": percentage baked directly into each slice's own label
+    // text — piechart has no built-in "show percentage" option, but its
+    // label IS just whatever string label-key resolves to, so appending
+    // "(XX.XX%)" there is sufficient and needs no other change to the
+    // call itself. "onSlice": label text stays plain; percentage instead
+    // goes through inner-label, a genuinely separate cetz-plot mechanism
+    // (see innerLabelPercentageArg's own comment for why these can't
+    // share one code path).
+    const pieDataLiteral =
+      spec.showPercentage === "beside" ? categoricalDataLiteralWithPercentage(spec.data) : dataLiteral;
+    const innerLabelArg = spec.showPercentage === "onSlice" ? innerLabelPercentageArg(spec.data) : "";
     return `${header}
 #cetz.canvas({
   chart.piechart(
@@ -375,7 +437,7 @@ ${boxes},
     value-key: "value",
     label-key: "label",
     radius: 3,
-    slice-style: ${colorArrayLiteral(spec.data)}${legendArg}
+    slice-style: ${colorArrayLiteral(spec.data)}${legendArg}${innerLabelArg}
   )
 })
 `;
