@@ -1,5 +1,22 @@
 import { spawn } from "node:child_process";
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+// esbuild's CJS bundle target (dist/cli.cjs, format: "cjs") doesn't
+// polyfill `import.meta.url` — it warns "You need to set the output
+// format to esm" and leaves it undefined, which would break
+// fileURLToPath(undefined) at runtime in the packaged desktop app. But
+// __dirname (CJS-native) doesn't exist when this file runs as plain ESM
+// via tsx (dev/test, unbundled) — referencing it directly there would
+// throw a ReferenceError at parse time. `typeof __dirname` sidesteps
+// that (safe on an undeclared identifier); the `declare` satisfies TS
+// without requiring @types/node's CJS globals in this ESM package.
+declare const __dirname: string | undefined;
+function currentDir(): string {
+  if (typeof __dirname !== "undefined") return __dirname;
+  return dirname(fileURLToPath(import.meta.url));
+}
 
 const typstBin = process.env.TYPST_BIN || "typst";
 
@@ -18,8 +35,31 @@ export type CompileResult = { ok: true } | { ok: false; message: string; details
 // via fontFamily, axis ticks) silently fell back to whatever font Typst's
 // default search happened to resolve, making the fontFamily choice a no-op —
 // caught via a real compile showing "sans" and "serif" rendering identically.
+//
+// Real bug, caught live: unlike anvilnote-renderer's own getFontDir() (which
+// falls back to its local fonts/ folder when the env var is unset),
+// anvilnote-charts had NO fallback at all — an unset env var silently
+// produced an EMPTY args array (no --font-path/--ignore-system-fonts),
+// letting Typst fall through to system font resolution. A dev anvilnote-api
+// server started without ANVILNOTE_FONT_DIR set ran this way for an entire
+// session: fontFamily became a no-op, and CJK category-axis labels drew
+// with inconsistent baselines (system font metrics differ per glyph from
+// the bundled fonts'). Fixed with the same "local monorepo sibling"
+// fallback anvilnote-api's own ANVILNOTE_RENDERER_PATH default already
+// assumes: `<this package>/../anvilnote-renderer/fonts`, resolved relative
+// to THIS FILE's own location (not process.cwd(), which depends on the
+// caller) so it works the same whether invoked from source or from the
+// bundled dist/cli.cjs. Desktop/production always sets the env var
+// explicitly (see anvilnote-desktop's own font staging), so this fallback
+// only matters for local dev — harmless, unused, when the env var is set.
+function localFontDirFallback(): string | null {
+  const candidate = join(currentDir(), "..", "..", "anvilnote-renderer", "fonts");
+  return existsSync(candidate) ? candidate : null;
+}
+
 function fontPathArgs(): string[] {
-  const dir = (process.env.ANVILNOTE_FONT_DIR ?? process.env.TYPST_FONT_PATH ?? "").trim();
+  const fromEnv = (process.env.ANVILNOTE_FONT_DIR ?? process.env.TYPST_FONT_PATH ?? "").trim();
+  const dir = fromEnv || localFontDirFallback();
   return dir ? ["--font-path", dir, "--ignore-system-fonts"] : [];
 }
 
