@@ -123,7 +123,9 @@ test("pie chart uses a bare color array for slice-style and shows legend by defa
   });
   assert.match(typ, /chart\.piechart\(/);
   assert.match(typ, /slice-style: \(rgb\("#E3120B"\), rgb\("#0D0D0D"\),\)/);
-  assert.doesNotMatch(typ, /legend:/);
+  // The shared canvas style config may contain `legend:` typography. Only
+  // piechart's own `legend: (label: none)` argument suppresses the legend.
+  assert.doesNotMatch(typ, /legend: \(label: none\)/);
 });
 
 test("pie chart suppresses the legend when showLegend is false", () => {
